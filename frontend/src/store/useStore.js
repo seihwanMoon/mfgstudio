@@ -9,6 +9,8 @@ const useStore = create((set) => ({
   columnOverrides: {},
   compareResults: [],
   tuneTrials: [],
+  tuneResult: null,
+  selectedModelsForTune: [],
   productionModels: [],
   setupParams: {
     module_type: "classification",
@@ -67,6 +69,13 @@ const useStore = create((set) => ({
       tuneTrials: [...state.tuneTrials, trial],
     })),
   clearTuneTrials: () => set({ tuneTrials: [] }),
+  setTuneResult: (tuneResult) => set({ tuneResult }),
+  toggleSelectModel: (algorithm) =>
+    set((state) => ({
+      selectedModelsForTune: state.selectedModelsForTune.includes(algorithm)
+        ? state.selectedModelsForTune.filter((item) => item !== algorithm)
+        : [...state.selectedModelsForTune, algorithm].slice(0, 3),
+    })),
   setProductionModels: (productionModels) => set({ productionModels }),
 }))
 

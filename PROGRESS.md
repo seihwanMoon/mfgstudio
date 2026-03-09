@@ -82,11 +82,11 @@ TOTAL      [ 39 / 76 ] ▓▓▓▓▓░░░░░
 ### B-04: 학습 API (`routers/train.py`)
 - [x] `POST /api/train/setup` — setup() 실행, Experiment DB 저장
 - [x] `GET /api/train/setup/{experiment_id}/code` — 현재 설정을 Python 코드 문자열로 반환
-- [ ] `POST /api/train/compare` — compare_models() 시작
-- [ ] `GET /api/train/compare/{experiment_id}/stream` — SSE 스트림 (EventSourceResponse)
-- [ ] `GET /api/train/models` — PyCaret 사용 가능 알고리즘 목록 반환
-- [ ] `POST /api/train/tune` — tune_model() 실행
-- [ ] `GET /api/train/tune/{job_id}/stream` — Optuna trial SSE 스트림
+- [x] `POST /api/train/compare` — compare_models() 시작
+- [x] `GET /api/train/compare/{experiment_id}/stream` — SSE 스트림 (EventSourceResponse)
+- [x] `GET /api/train/models` — PyCaret 사용 가능 알고리즘 목록 반환
+- [x] `POST /api/train/tune` — tune_model() 실행
+- [x] `GET /api/train/tune/{job_id}/stream` — Optuna trial SSE 스트림
 - [ ] `POST /api/train/finalize/{model_id}` — finalize_model() + save_model()
 
 ### B-05: 분석 API (`routers/analyze.py`)
@@ -161,21 +161,21 @@ TOTAL      [ 39 / 76 ] ▓▓▓▓▓░░░░░
 - [x] `POST /api/train/setup` + `GET /api/train/setup/{id}/code` 연동
 
 ### F-07: 화면 4 — 모델 비교 (`pages/ComparePage.jsx`)
-- [ ] `CompareOptionsPanel.jsx` — sort, budget_time, n_select, exclude 설정
-- [ ] `LeaderboardTable.jsx` — 알고리즘 × 지표 테이블 (체크박스 선택)
-- [ ] `useSSECompare.js` — SSE 훅 (실시간 행 추가)
-- [ ] `RadarCompare.jsx` — 선택 모델 레이더 차트
-- [ ] `MLflowRunLinks.jsx` — run_id 링크 목록
-- [ ] `POST /api/train/compare` + `GET /api/train/compare/{id}/stream` SSE 연동
+- [x] `CompareOptionsPanel.jsx` — sort, budget_time, n_select, exclude 설정
+- [x] `LeaderboardTable.jsx` — 알고리즘 × 지표 테이블 (체크박스 선택)
+- [x] `useSSECompare.js` — SSE 훅 (실시간 행 추가)
+- [x] `RadarCompare.jsx` — 선택 모델 레이더 차트
+- [x] `MLflowRunLinks.jsx` — run_id 링크 목록
+- [x] `POST /api/train/compare` + `GET /api/train/compare/{id}/stream` SSE 연동
 
 ### F-08: 화면 5 — 학습·튜닝 (`pages/TunePage.jsx`)
-- [ ] `TuneOptionsPanel.jsx` — optimize, search_library, n_iter, choose_better
-- [ ] `ModelSelectFromCompare.jsx` — compare 결과 모델 체크박스 선택
-- [ ] `OptunaScatterChart.jsx` — trial별 점수 실시간 산점도
-- [ ] `useSSETune.js` — SSE 훅 (trial 실시간)
-- [ ] `TuneBeforeAfter.jsx` — 지표 Before/After 비교 테이블
-- [ ] `HyperparamsDiff.jsx` — 변경된 하이퍼파라미터 diff 표시
-- [ ] `POST /api/train/tune` + SSE 연동
+- [x] `TuneOptionsPanel.jsx` — optimize, search_library, n_iter, choose_better
+- [x] `ModelSelectFromCompare.jsx` — compare 결과 모델 체크박스 선택
+- [x] `OptunaScatterChart.jsx` — trial별 점수 실시간 산점도
+- [x] `useSSETune.js` — SSE 훅 (trial 실시간)
+- [x] `TuneBeforeAfter.jsx` — 지표 Before/After 비교 테이블
+- [x] `HyperparamsDiff.jsx` — 변경된 하이퍼파라미터 diff 표시
+- [x] `POST /api/train/tune` + SSE 연동
 
 ### F-09: 화면 6 — 모델 분석 (`pages/AnalyzePage.jsx`)
 - [ ] `PlotSelector.jsx` — 분류/회귀별 플롯 목록 사이드 탭
@@ -239,7 +239,7 @@ TOTAL      [ 39 / 76 ] ▓▓▓▓▓░░░░░
 
 | 날짜 | 작업 | 담당 에이전트 |
 |------|------|-------------|
-| 2026-03-09 | SETUP S-01, S-03, S-04, S-05 완료 / B-01, B-02, B-04 일부, B-08 구현 및 검증 / F-01, F-02, F-03, F-04, F-05, F-06 구현 | Codex |
+| 2026-03-09 | SETUP S-01, S-03, S-04, S-05 완료 / B-01, B-02, B-04(compare/tune 포함), B-08 구현 및 검증 / F-01~F-08 구현 | Codex |
 
 ---
 
