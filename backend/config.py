@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_pass: str = ""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", protected_namespaces=("settings_",))
 
 
 settings = Settings()

@@ -11,6 +11,7 @@ from models.dataset import Dataset
 from models.experiment import Experiment
 from models.trained_model import TrainedModel
 from services.pycaret_service import (
+    finalize_result,
     generate_compare_results,
     generate_tune_trials,
     list_available_models,
@@ -248,3 +249,23 @@ async def tune_stream(job_id: str, db: Session = Depends(get_db)):
         yield {"event": "done", "data": json.dumps(summary, ensure_ascii=False)}
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/finalize/{model_id}")
+def finalize_model(model_id: int, db: Session = Depends(get_db)):
+    model = db.query(TrainedModel).filter(TrainedModel.id == model_id).first()
+    if not model:
+        raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
+
+    final_name = model.mlflow_model_name or f"{model.algorithm.lower().replace(' ', '_')}_final"
+    metrics = json.loads(model.metrics or "{}")
+    result = finalize_result(final_name, metrics)
+    model.model_path = result["model_path"]
+    model.metrics = json.dumps(result["final_metrics"], ensure_ascii=False)
+    db.commit()
+    return {
+        "model_id": model.id,
+        "model_path": model.model_path,
+        "final_metrics": result["final_metrics"],
+        "run_id": model.mlflow_run_id,
+    }

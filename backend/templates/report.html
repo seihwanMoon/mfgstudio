@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ title }}</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        color: #10233a;
+        margin: 32px;
+      }
+
+      h1,
+      h2 {
+        margin-bottom: 8px;
+      }
+
+      .meta,
+      .card {
+        border: 1px solid #d7e3f1;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid #e6eef8;
+      }
+
+      th {
+        background: #f2f7fc;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>{{ model_name }}</h1>
+    <div class="meta">
+      <div>Algorithm: {{ algorithm }}</div>
+      <div>Version: {{ version or "-" }}</div>
+      <div>Stage: {{ stage or "-" }}</div>
+      <div>Generated At: {{ generated_at or "-" }}</div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Operations</h2>
+        <div>Drift Score: {{ drift_score }}</div>
+        <div>Predictions Today: {{ pred_count_today }}</div>
+        <div>Predictions Total: {{ pred_count_total }}</div>
+      </div>
+      <div class="card">
+        <h2>Metrics</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key, value in metrics.items() %}
+            <tr>
+              <td>{{ key }}</td>
+              <td>{{ value }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Hyperparameters</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if hyperparams %}
+            {% for key, value in hyperparams.items() %}
+            <tr>
+              <td>{{ key }}</td>
+              <td>{{ value }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="2">No hyperparameter diff recorded.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </body>
+</html>
