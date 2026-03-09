@@ -348,7 +348,7 @@ services:
 
   frontend:
     build: ./frontend
-    ports: ["3000:3000"]
+ports: ["5173:3000"]
     depends_on: [backend]
 
   mlflow:

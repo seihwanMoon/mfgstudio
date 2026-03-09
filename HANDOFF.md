@@ -1,14 +1,13 @@
 # HANDOFF
 
-Last updated: 2026-03-09
+Last updated: 2026-03-10
 
 ## Current state
 
 - GitHub `main` last pushed commit: `b0771cf feat: switch training flow to real pycaret runtime`
-- Working tree is expected to contain only the Docker dependency alignment changes from today:
-  - `backend/requirements.txt`
-- `PROGRESS.md` status: `75 / 76`
-- Remaining unchecked item: `S-02 docker compose up --build`
+- Local work completes the final remaining task: `S-02 docker compose up --build`
+- `PROGRESS.md` status is now `76 / 76`
+- Current working tree contains today's completion updates and is ready to commit
 
 ## What is already working
 
@@ -25,56 +24,40 @@ Last updated: 2026-03-09
   - single prediction
 - `npm run build` passed.
 - Python compile checks passed.
+- `docker compose up --build -d` now passes.
+- Runtime checks passed:
+  - `http://localhost:8000/health`
+  - `http://localhost:5000`
+  - `http://localhost:5173`
 
 ## Docker status
 
 - Docker Desktop engine is running.
 - `docker compose config` passed.
-- `docker compose up --build -d` was retried.
-- Build blocker discovered and partially fixed:
+- `docker compose up --build -d` completed successfully.
+- Build blockers resolved:
   - `pycaret 3.3.2` required `pandas < 2.2.0`
-  - `pycaret[full] 3.3.2` required `shap ~= 0.44.0`
+  - `pycaret[full]` was narrowed to `pycaret` to avoid unnecessary extras in the backend image
+  - `shap` was aligned to `0.44.1`
 - `backend/requirements.txt` was updated to:
+  - `pycaret==3.3.2`
   - `pandas==2.1.4`
   - `shap==0.44.1`
-- The final full Docker build was not completed because the run was interrupted mid-build.
+- Windows reserved the `2981-3080` port range on this machine, so the frontend host port was changed from `3000` to `5173`.
 
-## First step tomorrow
+## Current runtime entrypoints
 
-Run:
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+- MLflow: `http://localhost:5000`
+
+## Next recommended action
+
+Commit and push today's completion work:
 
 ```powershell
 cd D:\GITHUB\mfgstudio
-docker compose up --build -d
+git add .
+git commit -m "chore: finalize docker runtime verification"
+git push
 ```
-
-Then verify:
-
-```powershell
-docker compose ps
-curl http://localhost:8000/health
-curl http://localhost:5000
-curl http://localhost:3000
-```
-
-## If Docker build still fails
-
-Check the backend image dependency resolver output first. The most likely remaining issues are:
-
-- another transitive conflict inside `pycaret[full]`
-- a Linux-only system package requirement for one of the ML/visualization dependencies
-
-If the backend image builds but runtime fails, inspect:
-
-```powershell
-docker compose logs backend --tail=200
-docker compose logs frontend --tail=200
-docker compose logs mlflow --tail=200
-```
-
-## Suggested next action after Docker success
-
-1. Mark `S-02` complete in `PROGRESS.md`
-2. Update overall progress to `76 / 76`
-3. Commit the Docker dependency alignment
-4. Push to GitHub

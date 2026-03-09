@@ -1,22 +1,21 @@
 # PROGRESS
 
 > Rule: check this file before starting work, mark completed items with `[x]`, and record blockers under `Error Log`.
-> Current status reflects the codebase as of 2026-03-09.
+> Current status reflects the codebase as of 2026-03-10.
 
 ---
 
 ## Overall Progress
 
 ```text
-SETUP      [ 4 / 5  ]
+SETUP      [ 5 / 5  ]
 BACKEND    [ 28 / 28 ]
 FRONTEND   [ 33 / 33 ]
 MLOPS      [ 10 / 10 ]
-TOTAL      [ 75 / 76 ]
+TOTAL      [ 76 / 76 ]
 ```
 
-Pending work is currently limited to:
-- `S-02` Docker runtime verification
+All planned tasks are currently complete.
 
 ---
 
@@ -32,7 +31,7 @@ Pending work is currently limited to:
 - [x] Create `docker-compose.yml`
 - [x] Create `backend/Dockerfile`
 - [x] Create `frontend/Dockerfile`
-- [ ] Verify `docker compose up --build`
+- [x] Verify `docker compose up --build`
 
 ### S-03: Backend bootstrap
 - [x] Create `backend/requirements.txt`
@@ -241,6 +240,7 @@ Pending work is currently limited to:
 | Date | Work | Owner |
 |------|------|-------|
 | 2026-03-09 | Setup bootstrap, FastAPI/React foundations, dashboard/upload/setup/compare/tune flows, analyze/finalize/predict/registry/MLflow screens, drift/schedule/report backend, real PyCaret classification flow, and `PROGRESS.md` normalization | Codex |
+| 2026-03-10 | Docker runtime verification completed, backend dependency alignment applied for PyCaret image builds, and Docker frontend host port shifted to `5173` to avoid Windows reserved port range conflicts | Codex |
 
 ---
 
@@ -250,6 +250,11 @@ Pending work is currently limited to:
 Symptom: `docker compose up --build` is still not fully verified.
 Cause: The first attempt was blocked by Docker engine unavailability, and the later attempt exposed backend dependency conflicts (`pycaret 3.3.2` with `pandas==2.2.1`, then `shap==0.49.1`).
 Resolution: Docker engine is now running, and `backend/requirements.txt` was aligned to `pandas==2.1.4` and `shap==0.44.1`. Full rebuild still needs one uninterrupted retry.
+
+### [2026-03-10] Docker frontend port binding on Windows
+Symptom: `docker compose up --build -d` failed while binding frontend host port `3000`, and the same issue occurred on `3001`.
+Cause: Windows reserved the `2981-3080` TCP range on this machine, so Docker could not expose the Vite container on those ports.
+Resolution: The frontend Docker host port was moved to `5173`, backend CORS was updated to allow `http://localhost:5173`, and the full stack now starts successfully with backend `8000`, MLflow `5000`, and frontend `5173`.
 
 ### [2026-03-09] PDF smoke test warnings
 Symptom: WeasyPrint emitted Fontconfig warnings during local PDF generation on Windows.
