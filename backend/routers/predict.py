@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from database import get_db
+from models.experiment import Experiment
 from models.prediction import Prediction
 from models.trained_model import TrainedModel
 from services.pycaret_service import predict_batch_rows, predict_payload
@@ -29,14 +30,20 @@ def _get_production_model(db: Session, model_name: str) -> TrainedModel:
         .first()
     )
     if not model:
-        raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Model not found")
+    if not model.model_path:
+        raise HTTPException(status_code=400, detail="Model is not finalized yet")
     return model
 
 
 @router.post("/{model_name}")
 def predict_single(model_name: str, payload: SinglePredictRequest, db: Session = Depends(get_db)):
     model = _get_production_model(db, model_name)
-    result = predict_payload(payload.input_data, payload.threshold)
+    experiment = db.query(Experiment).filter(Experiment.id == model.experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    result = predict_payload(model.model_path, experiment.module_type, payload.input_data, payload.threshold)
 
     db.add(
         Prediction(
@@ -45,7 +52,7 @@ def predict_single(model_name: str, payload: SinglePredictRequest, db: Session =
             source="manual",
             input_data=json.dumps(payload.input_data, ensure_ascii=False),
             label=result["label"],
-            score=result["score"],
+            score=result.get("score"),
             threshold=payload.threshold,
         )
     )
@@ -63,6 +70,10 @@ async def predict_batch(
     db: Session = Depends(get_db),
 ):
     model = _get_production_model(db, model_name)
+    experiment = db.query(Experiment).filter(Experiment.id == model.experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
     tmp_path = Path(settings.upload_dir) / f"batch_{file.filename}"
     with tmp_path.open("wb") as target:
         shutil.copyfileobj(file.file, target)
@@ -72,7 +83,7 @@ async def predict_batch(
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    results = predict_batch_rows(df.to_dict("records"), threshold)
+    results = predict_batch_rows(model.model_path, experiment.module_type, df.to_dict("records"), threshold)
     db.add(
         Prediction(
             model_id=model.id,

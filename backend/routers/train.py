@@ -1,5 +1,5 @@
-import json
 import asyncio
+import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -11,12 +11,12 @@ from models.dataset import Dataset
 from models.experiment import Experiment
 from models.trained_model import TrainedModel
 from services.pycaret_service import (
-    finalize_result,
-    generate_compare_results,
-    generate_tune_trials,
+    compare_models_real,
+    ensure_experiment_context,
+    finalize_model_real,
     list_available_models,
     run_setup,
-    summarize_tune_result,
+    tune_model_real,
 )
 
 router = APIRouter()
@@ -44,14 +44,7 @@ class TuneRequest(BaseModel):
 def setup_experiment(req: SetupRequest, db: Session = Depends(get_db)):
     dataset = db.query(Dataset).filter(Dataset.id == req.dataset_id).first()
     if not dataset:
-        raise HTTPException(status_code=404, detail="데이터셋을 찾을 수 없습니다")
-
-    result = run_setup(
-        dataset_path=dataset.stored_path,
-        module_type=req.module_type,
-        params=req.params,
-        mlflow_experiment_name=req.experiment_name,
-    )
+        raise HTTPException(status_code=404, detail="Dataset not found")
 
     experiment = Experiment(
         name=req.experiment_name,
@@ -59,7 +52,6 @@ def setup_experiment(req: SetupRequest, db: Session = Depends(get_db)):
         module_type=req.module_type,
         target_col=req.params.get("target_col"),
         setup_params=json.dumps(req.params, ensure_ascii=False),
-        mlflow_exp_id=result.get("mlflow_experiment_id"),
         mlflow_exp_name=req.experiment_name,
         status="setup",
     )
@@ -67,6 +59,21 @@ def setup_experiment(req: SetupRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(experiment)
 
+    try:
+        result = run_setup(
+            experiment_id=experiment.id,
+            dataset_path=dataset.stored_path,
+            module_type=req.module_type,
+            params=req.params,
+            mlflow_experiment_name=req.experiment_name,
+        )
+    except Exception as exc:
+        experiment.status = "setup_error"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"setup failed: {exc}") from exc
+
+    experiment.mlflow_exp_id = result.get("mlflow_experiment_id")
+    db.commit()
     return {
         "experiment_id": experiment.id,
         "pipeline_steps": result.get("pipeline_steps", []),
@@ -78,7 +85,7 @@ def setup_experiment(req: SetupRequest, db: Session = Depends(get_db)):
 def get_setup_code(experiment_id: int, db: Session = Depends(get_db)):
     experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
     if not experiment:
-        raise HTTPException(status_code=404, detail="실험을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Experiment not found")
 
     params = json.loads(experiment.setup_params or "{}")
     module_imports = {
@@ -112,7 +119,7 @@ def get_setup_code(experiment_id: int, db: Session = Depends(get_db)):
 def start_compare(req: CompareRequest, db: Session = Depends(get_db)):
     experiment = db.query(Experiment).filter(Experiment.id == req.experiment_id).first()
     if not experiment:
-        raise HTTPException(status_code=404, detail="실험을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Experiment not found")
 
     params = json.loads(experiment.setup_params or "{}")
     params["compare_options"] = req.options
@@ -130,11 +137,27 @@ def start_compare(req: CompareRequest, db: Session = Depends(get_db)):
 async def compare_stream(experiment_id: int, db: Session = Depends(get_db)):
     experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
     if not experiment:
-        raise HTTPException(status_code=404, detail="실험을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    dataset = db.query(Dataset).filter(Dataset.id == experiment.dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
 
     params = json.loads(experiment.setup_params or "{}")
     options = params.get("compare_options", {})
-    results = generate_compare_results(experiment_id, experiment.module_type, options)
+
+    try:
+        ensure_experiment_context(
+            experiment_id=experiment.id,
+            dataset_path=dataset.stored_path,
+            module_type=experiment.module_type,
+            params=params,
+            experiment_name=experiment.name,
+        )
+        results = compare_models_real(experiment_id, options)
+    except Exception as exc:
+        experiment.status = "compare_error"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"compare failed: {exc}") from exc
 
     db.query(TrainedModel).filter(TrainedModel.experiment_id == experiment_id).delete()
     for row in results:
@@ -152,19 +175,12 @@ async def compare_stream(experiment_id: int, db: Session = Depends(get_db)):
 
     async def event_generator():
         for row in results:
-            await asyncio.sleep(0.15)
-            yield {
-                "event": "model_result",
-                "data": json.dumps(row, ensure_ascii=False),
-            }
-        await asyncio.sleep(0.05)
+            await asyncio.sleep(0.1)
+            yield {"event": "model_result", "data": json.dumps(row, ensure_ascii=False)}
         yield {
             "event": "done",
             "data": json.dumps(
-                {
-                    "best_algorithm": results[0]["algorithm"] if results else None,
-                    "experiment_id": experiment_id,
-                },
+                {"best_algorithm": results[0]["algorithm"] if results else None, "experiment_id": experiment_id},
                 ensure_ascii=False,
             ),
         }
@@ -195,15 +211,11 @@ def list_models(module_type: str = "classification"):
 def start_tune(req: TuneRequest, db: Session = Depends(get_db)):
     experiment = db.query(Experiment).filter(Experiment.id == req.experiment_id).first()
     if not experiment:
-        raise HTTPException(status_code=404, detail="실험을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Experiment not found")
 
     job_id = f"{req.experiment_id}__{req.algorithm}"
     params = json.loads(experiment.setup_params or "{}")
-    params["tune_job"] = {
-        "job_id": job_id,
-        "algorithm": req.algorithm,
-        "options": req.tune_options,
-    }
+    params["tune_job"] = {"job_id": job_id, "algorithm": req.algorithm, "options": req.tune_options}
     experiment.setup_params = json.dumps(params, ensure_ascii=False)
     experiment.status = "tuning"
     db.commit()
@@ -217,17 +229,32 @@ async def tune_stream(job_id: str, db: Session = Depends(get_db)):
         experiment_id_str, algorithm = job_id.split("__", 1)
         experiment_id = int(experiment_id_str)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="잘못된 job_id 형식입니다") from exc
+        raise HTTPException(status_code=400, detail="Invalid tune job id") from exc
 
     experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
     if not experiment:
-        raise HTTPException(status_code=404, detail="실험을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    dataset = db.query(Dataset).filter(Dataset.id == experiment.dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
 
     params = json.loads(experiment.setup_params or "{}")
     tune_options = params.get("tune_job", {}).get("options", {})
-    n_iter = int(tune_options.get("n_iter", 20))
-    trials = generate_tune_trials(experiment_id, algorithm, n_iter=n_iter)
-    summary = summarize_tune_result(algorithm, trials)
+
+    try:
+        ensure_experiment_context(
+            experiment_id=experiment.id,
+            dataset_path=dataset.stored_path,
+            module_type=experiment.module_type,
+            params=params,
+            experiment_name=experiment.name,
+        )
+        summary = tune_model_real(experiment_id, algorithm, tune_options)
+        trials = summary.get("trials", [])
+    except Exception as exc:
+        experiment.status = "tune_error"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"tune failed: {exc}") from exc
 
     model = (
         db.query(TrainedModel)
@@ -243,9 +270,8 @@ async def tune_stream(job_id: str, db: Session = Depends(get_db)):
 
     async def event_generator():
         for trial in trials:
-            await asyncio.sleep(0.06)
+            await asyncio.sleep(0.04)
             yield {"event": "trial", "data": json.dumps(trial, ensure_ascii=False)}
-        await asyncio.sleep(0.05)
         yield {"event": "done", "data": json.dumps(summary, ensure_ascii=False)}
 
     return EventSourceResponse(event_generator())
@@ -255,11 +281,31 @@ async def tune_stream(job_id: str, db: Session = Depends(get_db)):
 def finalize_model(model_id: int, db: Session = Depends(get_db)):
     model = db.query(TrainedModel).filter(TrainedModel.id == model_id).first()
     if not model:
-        raise HTTPException(status_code=404, detail="모델을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Model not found")
 
+    experiment = db.query(Experiment).filter(Experiment.id == model.experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    dataset = db.query(Dataset).filter(Dataset.id == experiment.dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    params = json.loads(experiment.setup_params or "{}")
     final_name = model.mlflow_model_name or f"{model.algorithm.lower().replace(' ', '_')}_final"
     metrics = json.loads(model.metrics or "{}")
-    result = finalize_result(final_name, metrics)
+
+    try:
+        ensure_experiment_context(
+            experiment_id=experiment.id,
+            dataset_path=dataset.stored_path,
+            module_type=experiment.module_type,
+            params=params,
+            experiment_name=experiment.name,
+        )
+        result = finalize_model_real(experiment.id, model.algorithm, final_name, metrics)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"finalize failed: {exc}") from exc
+
     model.model_path = result["model_path"]
     model.metrics = json.dumps(result["final_metrics"], ensure_ascii=False)
     db.commit()

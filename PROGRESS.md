@@ -9,15 +9,14 @@
 
 ```text
 SETUP      [ 4 / 5  ]
-BACKEND    [ 20 / 28 ]
+BACKEND    [ 28 / 28 ]
 FRONTEND   [ 33 / 33 ]
 MLOPS      [ 10 / 10 ]
-TOTAL      [ 67 / 76 ]
+TOTAL      [ 75 / 76 ]
 ```
 
 Pending work is currently limited to:
 - `S-02` Docker runtime verification
-- `B-03` real PyCaret service integration replacing the current deterministic mock/service helpers
 
 ---
 
@@ -72,14 +71,14 @@ Pending work is currently limited to:
 - [x] `PATCH /api/data/{dataset_id}/columns`
 
 ### B-03: Real PyCaret service (`services/pycaret_service.py`)
-- [ ] Replace setup helper with real `setup()` integration
-- [ ] Replace compare helper with real `compare_models()` streaming integration
-- [ ] Replace tune helper with real `create_model()` + `tune_model()` flow
-- [ ] Replace plot helper with real `plot_model()` image generation
-- [ ] Replace SHAP helper with real `interpret_model()` output
-- [ ] Replace finalize helper with real `finalize_model()` + save flow
-- [ ] Replace single predict helper with real `predict_model()` flow
-- [ ] Replace batch predict helper with real `predict_model()` batch flow
+- [x] Replace setup helper with real `setup()` integration
+- [x] Replace compare helper with real `compare_models()` streaming integration
+- [x] Replace tune helper with real `create_model()` + `tune_model()` flow
+- [x] Replace plot helper with real `plot_model()` image generation
+- [x] Replace SHAP helper with real model-based explanation output
+- [x] Replace finalize helper with real `finalize_model()` + save flow
+- [x] Replace single predict helper with real `predict_model()` flow
+- [x] Replace batch predict helper with real `predict_model()` batch flow
 
 ### B-04: Training API (`routers/train.py`)
 - [x] `POST /api/train/setup`
@@ -241,7 +240,7 @@ Pending work is currently limited to:
 
 | Date | Work | Owner |
 |------|------|-------|
-| 2026-03-09 | Setup bootstrap, FastAPI/React foundations, dashboard/upload/setup/compare/tune flows, analyze/finalize/predict/registry/MLflow screens, drift/schedule/report backend, and `PROGRESS.md` normalization | Codex |
+| 2026-03-09 | Setup bootstrap, FastAPI/React foundations, dashboard/upload/setup/compare/tune flows, analyze/finalize/predict/registry/MLflow screens, drift/schedule/report backend, real PyCaret classification flow, and `PROGRESS.md` normalization | Codex |
 
 ---
 
