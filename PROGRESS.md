@@ -146,19 +146,19 @@ TOTAL      [ 39 / 76 ] ▓▓▓▓▓░░░░░
 - [x] `GET /api/dashboard/models` 연동
 
 ### F-05: 화면 2 — 데이터 업로드 (`pages/UploadPage.jsx`)
-- [ ] `FileDropzone.jsx` — react-dropzone 기반 드래그앤드롭
-- [ ] `DataQualitySummary.jsx` — 행/열/결측/중복 수 통계 카드
-- [ ] `ColumnTypeTable.jsx` — 컬럼별 타입 감지 결과 + 강제 변경 드롭다운
-- [ ] `DataPreviewTable.jsx` — 상위 50행 미리보기 (결측값 하이라이트)
-- [ ] `POST /api/data/upload` + `GET /api/data/{id}/preview` 연동
+- [x] `FileDropzone.jsx` — react-dropzone 기반 드래그앤드롭
+- [x] `DataQualitySummary.jsx` — 행/열/결측/중복 수 통계 카드
+- [x] `ColumnTypeTable.jsx` — 컬럼별 타입 감지 결과 + 강제 변경 드롭다운
+- [x] `DataPreviewTable.jsx` — 상위 50행 미리보기 (결측값 하이라이트)
+- [x] `POST /api/data/upload` + `GET /api/data/{id}/preview` 연동
 
 ### F-06: 화면 3 — 실험 설정 (`pages/SetupPage.jsx`)
-- [ ] `ModuleSelector.jsx` — 분류/회귀/클러스터링/이상탐지/시계열 탭
-- [ ] `BasicSettingsForm.jsx` — target, experiment_name, train_size, fold
-- [ ] `PreprocessingForm.jsx` — normalize, fix_imbalance, remove_outliers 등
-- [ ] `CodePreviewPanel.jsx` — 실시간 setup() Python 코드 자동 생성 표시
-- [ ] `SetupResultToast.jsx` — setup() 완료 후 결과 토스트 메시지
-- [ ] `POST /api/train/setup` + `GET /api/train/setup/{id}/code` 연동
+- [x] `ModuleSelector.jsx` — 분류/회귀/클러스터링/이상탐지/시계열 탭
+- [x] `BasicSettingsForm.jsx` — target, experiment_name, train_size, fold
+- [x] `PreprocessingForm.jsx` — normalize, fix_imbalance, remove_outliers 등
+- [x] `CodePreviewPanel.jsx` — 실시간 setup() Python 코드 자동 생성 표시
+- [x] `SetupResultToast.jsx` — setup() 완료 후 결과 토스트 메시지
+- [x] `POST /api/train/setup` + `GET /api/train/setup/{id}/code` 연동
 
 ### F-07: 화면 4 — 모델 비교 (`pages/ComparePage.jsx`)
 - [ ] `CompareOptionsPanel.jsx` — sort, budget_time, n_select, exclude 설정
@@ -239,7 +239,7 @@ TOTAL      [ 39 / 76 ] ▓▓▓▓▓░░░░░
 
 | 날짜 | 작업 | 담당 에이전트 |
 |------|------|-------------|
-| 2026-03-09 | SETUP S-01, S-03, S-04, S-05 완료 / B-01, B-02, B-04 일부, B-08 구현 및 검증 / F-01, F-02, F-03, F-04 구현 | Codex |
+| 2026-03-09 | SETUP S-01, S-03, S-04, S-05 완료 / B-01, B-02, B-04 일부, B-08 구현 및 검증 / F-01, F-02, F-03, F-04, F-05, F-06 구현 | Codex |
 
 ---
 
