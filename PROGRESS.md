@@ -247,9 +247,9 @@ Pending work is currently limited to:
 ## Error Log
 
 ### [2026-03-09] S-02 Docker runtime verification
-Symptom: `docker compose up --build` could not be fully verified.
-Cause: Docker Desktop Linux engine pipe was unavailable in the current environment.
-Resolution: `docker compose config` passed, but container runtime verification is still pending on a machine with Docker engine running.
+Symptom: `docker compose up --build` is still not fully verified.
+Cause: The first attempt was blocked by Docker engine unavailability, and the later attempt exposed backend dependency conflicts (`pycaret 3.3.2` with `pandas==2.2.1`, then `shap==0.49.1`).
+Resolution: Docker engine is now running, and `backend/requirements.txt` was aligned to `pandas==2.1.4` and `shap==0.44.1`. Full rebuild still needs one uninterrupted retry.
 
 ### [2026-03-09] PDF smoke test warnings
 Symptom: WeasyPrint emitted Fontconfig warnings during local PDF generation on Windows.
