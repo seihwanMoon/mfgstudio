@@ -1,0 +1,56 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import mlflow
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from config import settings
+from database import init_db
+from routers import analyze, dashboard, data, predict, registry, train
+from services.mlflow_service import get_mlflow_status
+
+
+def ensure_runtime_dirs() -> None:
+    for path in (settings.upload_dir, settings.model_dir, settings.report_dir, "./mlruns"):
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ensure_runtime_dirs()
+    init_db()
+    mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+    yield
+
+
+app = FastAPI(
+    title="Manufacturing AI Studio API",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(data.router, prefix="/api/data", tags=["data"])
+app.include_router(train.router, prefix="/api/train", tags=["train"])
+app.include_router(analyze.router, prefix="/api/analyze", tags=["analyze"])
+app.include_router(predict.router, prefix="/api/predict", tags=["predict"])
+app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "mlflow": settings.mlflow_tracking_uri}
+
+
+@app.get("/api/mlflow/status")
+def mlflow_status():
+    return get_mlflow_status()
