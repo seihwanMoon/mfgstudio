@@ -45,6 +45,28 @@ METRIC_LABELS = {
 EXPERIMENT_CONTEXTS: dict[int, dict] = {}
 
 
+def _sanitize_column_name(name: str) -> str:
+    return " ".join(str(name).replace("\t", " ").replace("\n", " ").split()) or "column"
+
+
+def _normalize_dataframe_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, str]]:
+    mapping = {}
+    used = set()
+
+    for original in df.columns.tolist():
+        base = _sanitize_column_name(original)
+        candidate = base
+        suffix = 1
+        while candidate in used:
+            suffix += 1
+            candidate = f"{base}_{suffix}"
+        used.add(candidate)
+        mapping[str(original)] = candidate
+
+    normalized_df = df.rename(columns=mapping)
+    return normalized_df, mapping
+
+
 def _get_pycaret_module(module_type: str):
     if module_type == "classification":
         import pycaret.classification as pc
@@ -121,9 +143,19 @@ def _requires_safe_target_alias(target_col: str) -> bool:
 def _prepare_training_frame(df: pd.DataFrame, params: dict, context: dict) -> tuple[pd.DataFrame, dict]:
     prepared_df = df.copy()
     prepared_params = dict(params)
+    prepared_df, column_map = _normalize_dataframe_columns(prepared_df)
+    target_col = prepared_params.get("target_col")
+    if target_col:
+        prepared_params["target_col"] = column_map.get(target_col, _sanitize_column_name(target_col))
+    for key in ("ignore_features", "numeric_features", "categorical_features"):
+        values = prepared_params.get(key)
+        if values:
+            prepared_params[key] = [column_map.get(item, _sanitize_column_name(item)) for item in values]
+
     target_col = prepared_params.get("target_col")
     context["target_alias"] = None
-    context["target_original"] = target_col
+    context["target_original"] = params.get("target_col")
+    context["column_map"] = column_map
 
     if target_col and target_col in prepared_df.columns and _requires_safe_target_alias(target_col):
         alias = "__target__"
@@ -470,7 +502,7 @@ def get_shap(experiment_id: int, algorithm: str, row_index: int = 0) -> dict:
     for feature_name, shap_value in zip(features.columns.tolist(), shap_values):
         values.append(
             {
-                "feature": feature_name,
+                "feature": _sanitize_column_name(feature_name),
                 "shap_value": round(float(shap_value), 4),
                 "direction": "positive" if float(shap_value) >= 0 else "negative",
             }

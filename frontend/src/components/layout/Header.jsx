@@ -29,6 +29,7 @@ export default function Header({ meta, prev, next, screens, order }) {
               color: meta.color,
               border: `1px solid ${meta.color}55`,
               background: `${meta.color}18`,
+              fontWeight: 800,
             }}
           >
             {meta.icon}

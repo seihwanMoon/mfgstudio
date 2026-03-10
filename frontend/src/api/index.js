@@ -44,6 +44,8 @@ export const registryAPI = {
 }
 
 export const predictAPI = {
+  models: () => api.get("/api/predict/models"),
+  modelSchema: (modelName) => api.get(`/api/predict/models/${modelName}/schema`),
   single: (modelName, payload) => api.post(`/api/predict/${modelName}`, payload),
   batch: (modelName, formData, threshold = 0.5) =>
     api.post(`/api/predict/${modelName}/batch?threshold=${threshold}`, formData, {

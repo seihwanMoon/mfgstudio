@@ -4,7 +4,7 @@ const GROUPS = [
   { label: "운영", paths: ["/home"] },
   { label: "데이터", paths: ["/upload", "/setup"] },
   { label: "학습", paths: ["/compare", "/tune"] },
-  { label: "분석/배포", paths: ["/analyze", "/finalize", "/predict"] },
+  { label: "XAI/배포", paths: ["/analyze", "/finalize", "/predict"] },
   { label: "MLOps", paths: ["/mlflow"] },
 ]
 
@@ -27,7 +27,7 @@ export default function Sidebar({ activePath, screenMeta }) {
         <div style={{ color: "var(--accent-blue)", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 800 }}>
           MFG AI STUDIO
         </div>
-        <div style={{ color: "var(--text-soft)", fontSize: 10, marginTop: 3 }}>PyCaret 3.3 · MLflow 2.11</div>
+        <div style={{ color: "var(--text-soft)", fontSize: 10, marginTop: 3 }}>PyCaret 3.3 / MLflow 2.11</div>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
