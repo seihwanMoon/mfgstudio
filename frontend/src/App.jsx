@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import AppShell from "./components/layout/AppShell"
@@ -10,8 +11,16 @@ import PredictPage from "./pages/PredictPage"
 import SetupPage from "./pages/SetupPage"
 import TunePage from "./pages/TunePage"
 import UploadPage from "./pages/UploadPage"
+import useStore from "./store/useStore"
 
 export default function App() {
+  const theme = useStore((state) => state.theme)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem("mfgstudio-theme", theme)
+  }, [theme])
+
   return (
     <BrowserRouter>
       <AppShell>

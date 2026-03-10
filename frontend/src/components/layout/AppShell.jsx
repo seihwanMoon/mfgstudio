@@ -23,7 +23,7 @@ export default function AppShell({ children }) {
   const index = ORDER.indexOf(pathname)
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", color: "#E2EEFF" }}>
+    <div style={{ display: "flex", minHeight: "100vh", color: "var(--text-primary)" }}>
       <Sidebar activePath={pathname} screenMeta={SCREEN_META} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <Header

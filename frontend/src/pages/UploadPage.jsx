@@ -25,10 +25,7 @@ export default function UploadPage() {
       const formData = new FormData()
       formData.append("file", file)
       const upload = await dataAPI.upload(formData)
-      const [previewRes, qualityRes] = await Promise.all([
-        dataAPI.getPreview(upload.dataset_id),
-        dataAPI.getQuality(upload.dataset_id),
-      ])
+      const [previewRes, qualityRes] = await Promise.all([dataAPI.getPreview(upload.dataset_id), dataAPI.getQuality(upload.dataset_id)])
       setUploadInfo(upload)
       setPreview(previewRes)
       setQuality(qualityRes)
@@ -58,13 +55,13 @@ export default function UploadPage() {
         <ColumnTypeTable columns={columns} overrides={columnOverrides} onChange={handleColumnChange} />
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Button onClick={() => navigate("/setup")} disabled={!uploadInfo}>
-            다음: 실험 설정 →
+            다음: 실험 설정
           </Button>
         </div>
       </div>
 
       <div style={{ minHeight: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ color: "#E2EEFF", fontSize: 18, fontWeight: 800 }}>미리보기</div>
+        <div style={{ color: "var(--text-primary)", fontSize: 18, fontWeight: 800 }}>미리보기</div>
         <DataPreviewTable preview={preview} />
       </div>
     </div>

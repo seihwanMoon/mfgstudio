@@ -1,7 +1,7 @@
 export default function DataPreviewTable({ preview }) {
   if (!preview?.rows?.length) {
     return (
-      <div style={{ border: "1px dashed #234466", borderRadius: 14, minHeight: 280, display: "grid", placeItems: "center", color: "#8BA8C8" }}>
+      <div style={{ border: "1px dashed var(--border-strong)", borderRadius: 14, minHeight: 280, display: "grid", placeItems: "center", color: "var(--text-secondary)", background: "var(--bg-surface)" }}>
         업로드 후 상위 50행 미리보기가 여기에 표시됩니다.
       </div>
     )
@@ -10,13 +10,13 @@ export default function DataPreviewTable({ preview }) {
   const columns = preview.columns?.map((column) => column.name) || Object.keys(preview.rows[0])
 
   return (
-    <div style={{ border: "1px solid #1A3352", borderRadius: 14, overflow: "hidden" }}>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)" }}>
       <div style={{ overflow: "auto", maxHeight: 480 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead style={{ position: "sticky", top: 0, background: "#111E2E" }}>
+          <thead style={{ position: "sticky", top: 0, background: "var(--bg-surface-strong)" }}>
             <tr>
               {columns.map((column) => (
-                <th key={column} style={{ textAlign: "left", padding: "10px 12px", fontSize: 10, color: "#5A7A9A" }}>
+                <th key={column} style={{ textAlign: "left", padding: "10px 12px", fontSize: 10, color: "var(--text-soft)" }}>
                   {column}
                 </th>
               ))}
@@ -24,7 +24,7 @@ export default function DataPreviewTable({ preview }) {
           </thead>
           <tbody>
             {preview.rows.map((row, index) => (
-              <tr key={index} style={{ borderTop: "1px solid #1A3352", background: index % 2 === 0 ? "#0D1926" : "#101B2B" }}>
+              <tr key={index} style={{ borderTop: "1px solid var(--border)", background: index % 2 === 0 ? "var(--bg-surface)" : "var(--bg-surface-soft)" }}>
                 {columns.map((column) => {
                   const value = row[column]
                   const missing = value === "" || value === null || value === undefined
@@ -34,11 +34,11 @@ export default function DataPreviewTable({ preview }) {
                       style={{
                         padding: "10px 12px",
                         fontSize: 12,
-                        color: missing ? "#FBBF24" : "#E2EEFF",
-                        background: missing ? "rgba(251, 191, 36, 0.08)" : "transparent",
+                        color: missing ? "var(--warning)" : "var(--text-primary)",
+                        background: missing ? "rgba(217, 154, 17, 0.08)" : "transparent",
                       }}
                     >
-                      {missing ? "—" : String(value)}
+                      {missing ? "-" : String(value)}
                     </td>
                   )
                 })}

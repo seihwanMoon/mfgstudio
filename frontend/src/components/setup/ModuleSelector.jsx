@@ -1,9 +1,9 @@
 const MODULES = [
-  ["classification", "분류", "#38BDF8"],
-  ["regression", "회귀", "#FBBF24"],
-  ["clustering", "클러스터링", "#34D399"],
-  ["anomaly", "이상탐지", "#A78BFA"],
-  ["timeseries", "시계열", "#34D399"],
+  ["classification", "분류", "#1677FF"],
+  ["regression", "회귀", "#2E8BFF"],
+  ["clustering", "클러스터링", "#4A9DFF"],
+  ["anomaly", "이상탐지", "#6AABFF"],
+  ["timeseries", "시계열", "#94C3FF"],
 ]
 
 export default function ModuleSelector({ value, onChange }) {
@@ -19,9 +19,10 @@ export default function ModuleSelector({ value, onChange }) {
               borderRadius: 10,
               cursor: "pointer",
               padding: "12px 10px",
-              border: `1px solid ${active ? color : "#1A3352"}`,
-              background: active ? `${color}15` : "#0D1926",
-              color: active ? color : "#8BA8C8",
+              border: `1px solid ${active ? color : "var(--border)"}`,
+              background: active ? `${color}18` : "var(--bg-surface)",
+              color: active ? color : "var(--text-secondary)",
+              boxShadow: "var(--shadow-panel)",
               fontWeight: 700,
             }}
           >

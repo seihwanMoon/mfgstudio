@@ -40,9 +40,9 @@ export default function HomePage() {
       <StagingAlertBar count={0} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-        <Stat title="운영 모델" value={stats?.production_model_count ?? 0} color="#38BDF8" />
-        <Stat title="전체 예측 수" value={stats?.prediction_count_total ?? 0} color="#34D399" />
-        <Stat title="알림 수" value={stats?.alert_count ?? 0} color="#FBBF24" />
+        <Stat title="운영 모델" value={stats?.production_model_count ?? 0} color="var(--accent-blue)" />
+        <Stat title="전체 예측 수" value={stats?.prediction_count_total ?? 0} color="var(--success)" />
+        <Stat title="알림 수" value={stats?.alert_count ?? 0} color="var(--warning)" />
       </div>
 
       {loading ? (
@@ -52,11 +52,7 @@ export default function HomePage() {
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1.2fr .8fr", gap: 18 }}>
           <div style={{ minHeight: 0, overflow: "auto" }}>
-            {models.length ? (
-              <ModelCardGrid models={models} selectedModel={selectedModel} onSelect={setSelectedModel} />
-            ) : (
-              <EmptyState />
-            )}
+            {models.length ? <ModelCardGrid models={models} selectedModel={selectedModel} onSelect={setSelectedModel} /> : <EmptyState />}
           </div>
           <ModelDetailPanel model={selectedModel} />
         </div>
@@ -67,8 +63,8 @@ export default function HomePage() {
 
 function Stat({ title, value, color }) {
   return (
-    <div style={{ border: "1px solid #1A3352", borderRadius: 16, background: "#0D1926", padding: 16 }}>
-      <div style={{ color: "#5A7A9A", fontSize: 11, marginBottom: 8 }}>{title}</div>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 16, background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)", padding: 16 }}>
+      <div style={{ color: "var(--text-soft)", fontSize: 11, marginBottom: 8 }}>{title}</div>
       <div style={{ color, fontSize: 28, fontWeight: 800 }}>{value}</div>
     </div>
   )
@@ -78,13 +74,13 @@ function EmptyState() {
   return (
     <div
       style={{
-        border: "1px dashed #234466",
+        border: "1px dashed var(--border-strong)",
         borderRadius: 16,
-        background: "#0D1926",
+        background: "var(--bg-surface)",
         minHeight: 320,
         display: "grid",
         placeItems: "center",
-        color: "#8BA8C8",
+        color: "var(--text-secondary)",
         padding: 24,
       }}
     >

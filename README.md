@@ -40,7 +40,7 @@ Database   SQLite (SQLAlchemy 2.0)
 ### 포트 배분
 | 서비스 | 포트 |
 |--------|------|
-| Frontend (Vite dev) | 5173 |
+| Frontend (Vite dev) | 5273 |
 | Backend (FastAPI) | 8000 |
 | MLflow UI | 5000 |
 
@@ -179,7 +179,7 @@ cp .env.example .env
 docker-compose up --build
 
 # 4. 브라우저 열기
-# Frontend: http://localhost:5173
+# Frontend: http://localhost:5273
 # Backend API Docs: http://localhost:8000/docs
 # MLflow UI: http://localhost:5000
 ```

@@ -1,7 +1,7 @@
 export default function PreprocessingForm({ params, onChange }) {
   return (
-    <div style={{ border: "1px solid #1A3352", borderRadius: 14, background: "#0D1926", padding: 16 }}>
-      <h3 style={{ marginTop: 0, color: "#E2EEFF" }}>전처리 옵션</h3>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 14, background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)", padding: 16 }}>
+      <h3 style={{ marginTop: 0, color: "var(--text-primary)" }}>전처리 옵션</h3>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Toggle label="정규화" checked={params.normalize} onChange={(value) => onChange("normalize", value)} />
         <Toggle label="불균형 보정" checked={params.fix_imbalance} onChange={(value) => onChange("fix_imbalance", value)} />
@@ -26,7 +26,7 @@ export default function PreprocessingForm({ params, onChange }) {
 
 function Field({ label, children }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6, color: "#8BA8C8", fontSize: 12 }}>
+    <label style={{ display: "flex", flexDirection: "column", gap: 6, color: "var(--text-secondary)", fontSize: 12 }}>
       {label}
       {children}
     </label>
@@ -40,9 +40,9 @@ function Toggle({ label, checked, onChange }) {
       onClick={() => onChange(!checked)}
       style={{
         borderRadius: 10,
-        border: `1px solid ${checked ? "#38BDF8" : "#1A3352"}`,
-        background: checked ? "rgba(56, 189, 248, 0.1)" : "#111E2E",
-        color: checked ? "#38BDF8" : "#8BA8C8",
+        border: `1px solid ${checked ? "var(--accent-blue)" : "var(--border)"}`,
+        background: checked ? "var(--accent-blue-soft)" : "var(--bg-surface-strong)",
+        color: checked ? "var(--accent-blue)" : "var(--text-secondary)",
         padding: "12px 14px",
         textAlign: "left",
         cursor: "pointer",
@@ -56,8 +56,8 @@ function Toggle({ label, checked, onChange }) {
 
 const selectStyle = {
   borderRadius: 8,
-  border: "1px solid #1A3352",
-  background: "#111E2E",
-  color: "#E2EEFF",
+  border: "1px solid var(--border)",
+  background: "var(--bg-surface-strong)",
+  color: "var(--text-primary)",
   padding: "10px 12px",
 }

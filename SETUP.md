@@ -105,7 +105,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "5173:3000"
+      - "5273:3000"
     environment:
       - VITE_API_BASE_URL=http://localhost:8000
     depends_on:
@@ -313,7 +313,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5273"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -560,7 +560,7 @@ def get_mlflow_status() -> dict:
 docker-compose up --build
 
 # 확인 체크리스트
-# ✅ http://localhost:5173 — Frontend 정상
+# ✅ http://localhost:5273 — Frontend 정상
 # ✅ http://localhost:8000/docs — FastAPI Swagger UI
 # ✅ http://localhost:8000/health — { "status": "ok" }
 # ✅ http://localhost:5000 — MLflow UI 정상

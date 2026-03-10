@@ -1,7 +1,7 @@
 export default function Button({
   children,
   variant = "primary",
-  color = "#38BDF8",
+  color = "var(--accent-blue)",
   fullWidth = false,
   ...props
 }) {
@@ -13,14 +13,14 @@ export default function Button({
       {...props}
       style={{
         width: fullWidth ? "100%" : "auto",
-        borderRadius: 6,
+        borderRadius: 10,
         cursor: "pointer",
-        padding: "9px 14px",
-        fontSize: 12,
+        padding: "11px 15px",
+        fontSize: 13,
         fontWeight: 700,
         border: isGhost ? "none" : `1px solid ${color}`,
         background: isOutline ? "transparent" : isGhost ? `${color}18` : color,
-        color: isOutline || isGhost ? color : "#080F1A",
+        color: isOutline || isGhost ? color : "var(--accent-contrast)",
       }}
     >
       {children}

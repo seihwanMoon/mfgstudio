@@ -5,10 +5,10 @@ export default function CodeBlock({ code }) {
         margin: 0,
         padding: 14,
         borderRadius: 10,
-        border: "1px solid #1A3352",
-        background: "#050E1A",
+        border: "1px solid var(--border)",
+        background: "var(--bg-code)",
         overflow: "auto",
-        color: "#7AA8D0",
+        color: "var(--text-secondary)",
         fontSize: 12,
         lineHeight: 1.6,
       }}

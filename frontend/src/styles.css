@@ -3,10 +3,47 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
   font-family: "DM Sans", "Malgun Gothic", sans-serif;
-  background: #080f1a;
-  color: #e2eeff;
+  --accent-blue: #1677ff;
+  --accent-blue-soft: rgba(22, 119, 255, 0.12);
+  --accent-blue-strong: #0d63de;
+  --accent-contrast: #f8fbff;
+  --success: #15b57b;
+  --warning: #d99a11;
+  --danger: #d25252;
+  --bg-app: #07111d;
+  --bg-app-alt: #0d1b2e;
+  --bg-surface: rgba(9, 22, 38, 0.9);
+  --bg-surface-strong: #10243a;
+  --bg-surface-soft: #0c1a2b;
+  --bg-code: #081321;
+  --border: rgba(116, 163, 223, 0.22);
+  --border-strong: rgba(120, 176, 255, 0.34);
+  --text-primary: #eff6ff;
+  --text-secondary: #bfd1ea;
+  --text-muted: #88a2c2;
+  --text-soft: #6f89a9;
+  --shadow-panel: 0 16px 48px rgba(1, 10, 24, 0.24);
+  color-scheme: dark;
+  background: var(--bg-app);
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] {
+  --bg-app: #edf5ff;
+  --bg-app-alt: #dbeaff;
+  --bg-surface: rgba(255, 255, 255, 0.92);
+  --bg-surface-strong: #ffffff;
+  --bg-surface-soft: #f2f7ff;
+  --bg-code: #eff6ff;
+  --border: rgba(12, 72, 150, 0.16);
+  --border-strong: rgba(12, 72, 150, 0.28);
+  --text-primary: #10233b;
+  --text-secondary: #315176;
+  --text-muted: #547092;
+  --text-soft: #6f86a3;
+  --shadow-panel: 0 18px 40px rgba(73, 117, 181, 0.12);
+  color-scheme: light;
 }
 
 * {
@@ -19,8 +56,10 @@ body,
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 22%),
-    linear-gradient(180deg, #0a1320 0%, #080f1a 100%);
+    radial-gradient(circle at top right, rgba(22, 119, 255, 0.16), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(88, 177, 255, 0.1), transparent 22%),
+    linear-gradient(180deg, var(--bg-app-alt) 0%, var(--bg-app) 100%);
+  color: var(--text-primary);
 }
 
 button,
@@ -28,11 +67,16 @@ input,
 select,
 textarea {
   font: inherit;
+  outline-color: var(--accent-blue);
 }
 
 code,
 pre {
   font-family: "JetBrains Mono", Consolas, monospace;
+}
+
+::selection {
+  background: rgba(22, 119, 255, 0.22);
 }
 
 @keyframes spin {

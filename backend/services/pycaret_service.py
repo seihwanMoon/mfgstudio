@@ -107,6 +107,33 @@ def _build_setup_kwargs(df: pd.DataFrame, module_type: str, params: dict, experi
     return kwargs
 
 
+def _requires_safe_target_alias(target_col: str) -> bool:
+    try:
+        target_col.encode("ascii")
+    except UnicodeEncodeError:
+        return True
+    return not target_col.replace("_", "").isalnum()
+
+
+def _prepare_training_frame(df: pd.DataFrame, params: dict, context: dict) -> tuple[pd.DataFrame, dict]:
+    prepared_df = df.copy()
+    prepared_params = dict(params)
+    target_col = prepared_params.get("target_col")
+    context["target_alias"] = None
+
+    if target_col and target_col in prepared_df.columns and _requires_safe_target_alias(target_col):
+        alias = "__target__"
+        suffix = 1
+        while alias in prepared_df.columns:
+            alias = f"__target__{suffix}"
+            suffix += 1
+        prepared_df[alias] = prepared_df[target_col]
+        prepared_params["target_col"] = alias
+        context["target_alias"] = alias
+
+    return prepared_df, prepared_params
+
+
 def _extract_pipeline_steps(pc) -> list[str]:
     try:
         pipeline = pc.get_config("pipeline")
@@ -161,7 +188,8 @@ def _activate_experiment(experiment_id: int):
 
     pc = _get_pycaret_module(context["module_type"])
     df = pd.read_parquet(Path(context["dataset_path"]))
-    setup_kwargs = _build_setup_kwargs(df, context["module_type"], context["params"], context["experiment_name"])
+    prepared_df, prepared_params = _prepare_training_frame(df, context["params"], context)
+    setup_kwargs = _build_setup_kwargs(prepared_df, context["module_type"], prepared_params, context["experiment_name"])
     pc.setup(**setup_kwargs)
     name_to_id, id_to_name = _get_model_name_maps(pc)
     context["pc"] = pc

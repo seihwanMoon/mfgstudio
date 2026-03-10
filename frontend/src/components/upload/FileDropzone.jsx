@@ -26,24 +26,19 @@ export default function FileDropzone({ onFileSelect, loading }) {
     <div
       {...getRootProps()}
       style={{
-        border: `2px dashed ${isDragActive ? "#38BDF8" : "#1A3352"}`,
+        border: `2px dashed ${isDragActive ? "var(--accent-blue)" : "var(--border-strong)"}`,
         borderRadius: 16,
-        background: isDragActive ? "rgba(56, 189, 248, 0.08)" : "#0D1926",
+        background: isDragActive ? "var(--accent-blue-soft)" : "var(--bg-surface)",
+        boxShadow: "var(--shadow-panel)",
         padding: 28,
         cursor: "pointer",
       }}
     >
       <input {...getInputProps()} />
-      <div style={{ fontSize: 24, marginBottom: 10 }}>↑</div>
-      <div style={{ color: "#E2EEFF", fontSize: 18, fontWeight: 800, marginBottom: 6 }}>
-        CSV 또는 Excel 파일을 드래그하세요
-      </div>
-      <div style={{ color: "#8BA8C8", fontSize: 13, marginBottom: 12 }}>
-        지원 형식: `.csv`, `.xlsx`, `.xls` / 최대 200MB
-      </div>
-      <div style={{ color: "#38BDF8", fontSize: 12, fontWeight: 700 }}>
-        {loading ? "업로드 중..." : "파일 선택 또는 드롭"}
-      </div>
+      <div style={{ fontSize: 36, marginBottom: 10, color: "var(--accent-blue)" }}>↑</div>
+      <div style={{ color: "var(--text-primary)", fontSize: 18, fontWeight: 800, marginBottom: 6 }}>CSV 또는 Excel 파일을 드래그하세요</div>
+      <div style={{ color: "var(--text-secondary)", fontSize: 13, marginBottom: 12 }}>지원 형식: `.csv`, `.xlsx`, `.xls` / 최대 200MB</div>
+      <div style={{ color: "var(--accent-blue)", fontSize: 12, fontWeight: 700 }}>{loading ? "업로드 중..." : "파일 선택 또는 드롭"}</div>
     </div>
   )
 }

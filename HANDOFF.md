@@ -28,7 +28,7 @@ Last updated: 2026-03-10
 - Runtime checks passed:
   - `http://localhost:8000/health`
   - `http://localhost:5000`
-  - `http://localhost:5173`
+  - `http://localhost:5273`
 
 ## Docker status
 
@@ -47,7 +47,7 @@ Last updated: 2026-03-10
 
 ## Current runtime entrypoints
 
-- Frontend: `http://localhost:5173`
+- Frontend: `http://localhost:5273`
 - Backend API: `http://localhost:8000`
 - MLflow: `http://localhost:5000`
 

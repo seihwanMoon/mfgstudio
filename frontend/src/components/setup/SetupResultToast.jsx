@@ -1,14 +1,23 @@
-export default function SetupResultToast({ result }) {
-  if (!result) return null
+export default function SetupResultToast({ result, error }) {
+  if (!result && !error) return null
+
+  if (error) {
+    return (
+      <div style={{ border: "1px solid rgba(210, 82, 82, 0.35)", borderLeft: "4px solid var(--danger)", borderRadius: 12, background: "rgba(210, 82, 82, 0.08)", padding: 14 }}>
+        <div style={{ color: "var(--danger)", fontWeight: 800, marginBottom: 6 }}>setup() 실행 실패</div>
+        <div style={{ color: "var(--text-primary)", fontSize: 13 }}>{error}</div>
+      </div>
+    )
+  }
 
   return (
-    <div style={{ border: "1px solid #34D39955", borderLeft: "4px solid #34D399", borderRadius: 12, background: "rgba(52, 211, 153, 0.08)", padding: 14 }}>
-      <div style={{ color: "#34D399", fontWeight: 800, marginBottom: 6 }}>setup() 완료</div>
-      <div style={{ color: "#E2EEFF", fontSize: 13, marginBottom: 4 }}>
-        transformed shape: {result.transformed_shape?.join(" × ") || "—"}
+    <div style={{ border: "1px solid rgba(21, 181, 123, 0.28)", borderLeft: "4px solid var(--success)", borderRadius: 12, background: "rgba(21, 181, 123, 0.08)", padding: 14 }}>
+      <div style={{ color: "var(--success)", fontWeight: 800, marginBottom: 6 }}>setup() 완료</div>
+      <div style={{ color: "var(--text-primary)", fontSize: 13, marginBottom: 4 }}>
+        transformed shape: {result.transformed_shape?.join(" x ") || "-"}
       </div>
-      <div style={{ color: "#8BA8C8", fontSize: 12 }}>
-        pipeline: {(result.pipeline_steps || []).join(" → ") || "—"}
+      <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
+        pipeline: {(result.pipeline_steps || []).join(" > ") || "-"}
       </div>
     </div>
   )

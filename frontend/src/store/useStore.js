@@ -1,6 +1,12 @@
 import { create } from "zustand"
 
+const getInitialTheme = () => {
+  if (typeof window === "undefined") return "dark"
+  return localStorage.getItem("mfgstudio-theme") || "dark"
+}
+
 const useStore = create((set) => ({
+  theme: getInitialTheme(),
   currentDatasetId: null,
   currentExperimentId: null,
   currentModelId: null,
@@ -77,6 +83,11 @@ const useStore = create((set) => ({
         : [...state.selectedModelsForTune, algorithm].slice(0, 3),
     })),
   setProductionModels: (productionModels) => set({ productionModels }),
+  setTheme: (theme) => set({ theme }),
+  toggleTheme: () =>
+    set((state) => ({
+      theme: state.theme === "dark" ? "light" : "dark",
+    })),
 }))
 
 export default useStore

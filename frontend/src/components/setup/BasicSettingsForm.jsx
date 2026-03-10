@@ -1,10 +1,10 @@
 export default function BasicSettingsForm({ params, columns = [], onChange }) {
   return (
-    <div style={{ border: "1px solid #1A3352", borderRadius: 14, background: "#0D1926", padding: 16 }}>
-      <h3 style={{ marginTop: 0, color: "#E2EEFF" }}>기본 설정</h3>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 14, background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)", padding: 16 }}>
+      <h3 style={{ marginTop: 0, color: "var(--text-primary)" }}>기본 설정</h3>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="타겟 컬럼">
-          <select value={params.target_col} onChange={(event) => onChange("target_col", event.target.value)} style={selectStyle}>
+        <Field label="타깃 컬럼">
+          <select value={params.target_col} onChange={(event) => onChange("target_col", event.target.value)} style={inputStyle}>
             <option value="">선택</option>
             {columns.map((column) => (
               <option key={column.name ?? column} value={column.name ?? column}>
@@ -29,7 +29,7 @@ export default function BasicSettingsForm({ params, columns = [], onChange }) {
 
 function Field({ label, children }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6, color: "#8BA8C8", fontSize: 12 }}>
+    <label style={{ display: "flex", flexDirection: "column", gap: 6, color: "var(--text-secondary)", fontSize: 12 }}>
       {label}
       {children}
     </label>
@@ -38,10 +38,8 @@ function Field({ label, children }) {
 
 const inputStyle = {
   borderRadius: 8,
-  border: "1px solid #1A3352",
-  background: "#111E2E",
-  color: "#E2EEFF",
+  border: "1px solid var(--border)",
+  background: "var(--bg-surface-strong)",
+  color: "var(--text-primary)",
   padding: "10px 12px",
 }
-
-const selectStyle = inputStyle
