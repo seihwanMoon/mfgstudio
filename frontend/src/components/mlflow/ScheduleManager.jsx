@@ -8,7 +8,7 @@ const JOB_LABELS = {
 function localizeSummary(summary) {
   if (!summary) return "-"
   const retrainMatch = /^flagged (\d+) retrain candidates$/.exec(summary)
-  if (retrainMatch) return `재학습 후보 ${retrainMatch[1]}건 탐지`
+  if (retrainMatch) return `재학습 후보 ${retrainMatch[1]}건 감지`
   const driftMatch = /^checked (\d+) production models$/.exec(summary)
   if (driftMatch) return `Production 모델 ${driftMatch[1]}개 점검`
   return summary

@@ -17,6 +17,8 @@ export const trainAPI = {
   getCompareResult: (id) => api.get(`/api/train/compare/${id}/result`),
   getModels: (moduleType) => api.get(`/api/train/models?module_type=${moduleType}`),
   startTune: (payload) => api.post("/api/train/tune", payload),
+  createEnsemble: (payload) => api.post("/api/train/ensemble", payload),
+  createAutoML: (payload) => api.post("/api/train/automl", payload),
   finalize: (modelId) => api.post(`/api/train/finalize/${modelId}`),
 }
 

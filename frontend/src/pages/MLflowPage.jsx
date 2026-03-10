@@ -6,6 +6,13 @@ import ExperimentLogTable from "../components/mlflow/ExperimentLogTable"
 import ModelRegistryList from "../components/mlflow/ModelRegistryList"
 import ScheduleManager from "../components/mlflow/ScheduleManager"
 
+const TABS = [
+  ["logs", "실험 로그"],
+  ["compare", "실험 비교"],
+  ["registry", "레지스트리"],
+  ["schedule", "스케줄"],
+]
+
 export default function MLflowPage() {
   const [status, setStatus] = useState(null)
   const [models, setModels] = useState([])
@@ -14,23 +21,27 @@ export default function MLflowPage() {
   const [runs, setRuns] = useState([])
   const [jobs, setJobs] = useState([])
   const [tab, setTab] = useState("logs")
+  const [loadingExperiments, setLoadingExperiments] = useState(true)
+  const [loadingRuns, setLoadingRuns] = useState(false)
 
   useEffect(() => {
     mlflowAPI.status().then(setStatus).catch(() => setStatus({ status: "disconnected" }))
     registryAPI.listModels().then(setModels).catch(() => setModels([]))
+
+    setLoadingExperiments(true)
     mlflowAPI
       .experiments()
       .then((response) => {
         const rows = response.experiments || []
         setExperiments(rows)
-        if (rows.length) {
-          setSelectedExperimentId(rows[0].experiment_id)
-        }
+        setSelectedExperimentId(rows[0]?.experiment_id || null)
       })
       .catch(() => {
         setExperiments([])
         setSelectedExperimentId(null)
       })
+      .finally(() => setLoadingExperiments(false))
+
     scheduleAPI.jobs().then((response) => setJobs(response.jobs || [])).catch(() => setJobs([]))
   }, [])
 
@@ -39,7 +50,13 @@ export default function MLflowPage() {
       setRuns([])
       return
     }
-    mlflowAPI.runs(selectedExperimentId).then((response) => setRuns(response.runs || [])).catch(() => setRuns([]))
+
+    setLoadingRuns(true)
+    mlflowAPI
+      .runs(selectedExperimentId)
+      .then((response) => setRuns(response.runs || []))
+      .catch(() => setRuns([]))
+      .finally(() => setLoadingRuns(false))
   }, [selectedExperimentId])
 
   async function refreshJobs() {
@@ -73,14 +90,10 @@ export default function MLflowPage() {
         </div>
         <ModelRegistryList rows={models} />
       </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          {[
-            ["logs", "실험 로그"],
-            ["compare", "실험 비교"],
-            ["registry", "레지스트리"],
-            ["schedule", "스케줄"],
-          ].map(([key, label]) => (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {TABS.map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
@@ -97,19 +110,26 @@ export default function MLflowPage() {
             </button>
           ))}
         </div>
+
         {tab === "logs" ? (
-          <ExperimentLogTable
-            experiments={experiments}
-            selectedExperimentId={selectedExperimentId}
-            onSelectExperiment={setSelectedExperimentId}
-            runs={runs}
-          />
+          <>
+            <ExperimentLogTable
+              experiments={loadingExperiments ? [] : experiments}
+              selectedExperimentId={selectedExperimentId}
+              onSelectExperiment={setSelectedExperimentId}
+              runs={loadingRuns ? [] : runs}
+            />
+            {loadingExperiments || loadingRuns ? (
+              <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                {loadingExperiments ? "MLflow 실험 목록을 불러오는 중..." : "선택한 실험의 run 목록을 불러오는 중..."}
+              </div>
+            ) : null}
+          </>
         ) : null}
+
         {tab === "compare" ? <ExperimentCompareView experiments={experiments} /> : null}
         {tab === "registry" ? <ModelRegistryList rows={models} /> : null}
-        {tab === "schedule" ? (
-          <ScheduleManager jobs={jobs} onToggle={handleToggle} onRunNow={handleRunNow} />
-        ) : null}
+        {tab === "schedule" ? <ScheduleManager jobs={jobs} onToggle={handleToggle} onRunNow={handleRunNow} /> : null}
       </div>
     </div>
   )

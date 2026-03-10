@@ -11,11 +11,14 @@ from models.dataset import Dataset
 from models.experiment import Experiment
 from models.trained_model import TrainedModel
 from services.pycaret_service import (
+    automl_best_real,
+    blend_models_real,
     compare_models_real,
     ensure_experiment_context,
     finalize_model_real,
     list_available_models,
     run_setup,
+    stack_models_real,
     tune_model_real,
 )
 
@@ -38,6 +41,56 @@ class TuneRequest(BaseModel):
     experiment_id: int
     algorithm: str
     tune_options: dict = {}
+
+
+class EnsembleRequest(BaseModel):
+    experiment_id: int
+    algorithms: list[str]
+    method: str
+    options: dict = {}
+
+
+class AutoMLRequest(BaseModel):
+    experiment_id: int
+    options: dict = {}
+
+
+def _candidate_model_slug(experiment_name: str, algorithm: str) -> str:
+    return f"{experiment_name}_{algorithm.lower().replace(' ', '_').replace('(', '').replace(')', '')}"
+
+
+def _upsert_generated_candidate(db: Session, experiment: Experiment, summary: dict) -> TrainedModel:
+    algorithm = summary["algorithm"]
+    (
+        db.query(TrainedModel)
+        .filter(
+            TrainedModel.experiment_id == experiment.id,
+            TrainedModel.algorithm == algorithm,
+            TrainedModel.model_path.is_(None),
+            TrainedModel.mlflow_version.is_(None),
+        )
+        .delete()
+    )
+    model = TrainedModel(
+        experiment_id=experiment.id,
+        algorithm=algorithm,
+        is_tuned=summary["operation"] in {"blend", "stack", "automl"},
+        metrics=json.dumps(summary["after_metrics"], ensure_ascii=False),
+        hyperparams=json.dumps(
+            {
+                "operation": summary["operation"],
+                "members": summary.get("members", []),
+                "resolved_model_name": summary.get("resolved_model_name"),
+            },
+            ensure_ascii=False,
+        ),
+        mlflow_run_id=summary["run_id"],
+        mlflow_model_name=_candidate_model_slug(experiment.name, algorithm),
+    )
+    db.add(model)
+    db.commit()
+    db.refresh(model)
+    return model
 
 
 @router.post("/setup")
@@ -338,4 +391,79 @@ def finalize_model(model_id: int, db: Session = Depends(get_db)):
         "model_path": model.model_path,
         "final_metrics": result["final_metrics"],
         "run_id": result["run_id"],
+    }
+
+
+@router.post("/ensemble")
+def create_ensemble_candidate(req: EnsembleRequest, db: Session = Depends(get_db)):
+    experiment = db.query(Experiment).filter(Experiment.id == req.experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    dataset = db.query(Dataset).filter(Dataset.id == experiment.dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    params = json.loads(experiment.setup_params or "{}")
+
+    try:
+        ensure_experiment_context(
+            experiment_id=experiment.id,
+            dataset_path=dataset.stored_path,
+            module_type=experiment.module_type,
+            params=params,
+            experiment_name=experiment.name,
+        )
+        if req.method == "blend":
+            summary = blend_models_real(experiment.id, req.algorithms, req.options)
+        elif req.method == "stack":
+            summary = stack_models_real(experiment.id, req.algorithms, req.options)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported ensemble method")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{req.method} failed: {exc}") from exc
+
+    model = _upsert_generated_candidate(db, experiment, summary)
+    return {
+        "model_id": model.id,
+        "algorithm": summary["algorithm"],
+        "operation": summary["operation"],
+        "members": summary.get("members", []),
+        "after_metrics": summary["after_metrics"],
+        "run_id": summary["run_id"],
+    }
+
+
+@router.post("/automl")
+def create_automl_candidate(req: AutoMLRequest, db: Session = Depends(get_db)):
+    experiment = db.query(Experiment).filter(Experiment.id == req.experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    dataset = db.query(Dataset).filter(Dataset.id == experiment.dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    params = json.loads(experiment.setup_params or "{}")
+
+    try:
+        ensure_experiment_context(
+            experiment_id=experiment.id,
+            dataset_path=dataset.stored_path,
+            module_type=experiment.module_type,
+            params=params,
+            experiment_name=experiment.name,
+        )
+        summary = automl_best_real(experiment.id, req.options)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"automl failed: {exc}") from exc
+
+    model = _upsert_generated_candidate(db, experiment, summary)
+    return {
+        "model_id": model.id,
+        "algorithm": summary["algorithm"],
+        "operation": summary["operation"],
+        "resolved_model_name": summary.get("resolved_model_name"),
+        "after_metrics": summary["after_metrics"],
+        "run_id": summary["run_id"],
     }

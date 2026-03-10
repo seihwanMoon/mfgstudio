@@ -1,6 +1,14 @@
 export default function StageManager({ modelName, versions = [], onChangeStage, onRollback }) {
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 18, background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)", padding: 16 }}>
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 18,
+        background: "var(--bg-surface)",
+        boxShadow: "var(--shadow-panel)",
+        padding: 16,
+      }}
+    >
       <div style={{ color: "var(--text-primary)", fontWeight: 800, marginBottom: 8 }}>스테이지 관리</div>
       <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, marginBottom: 12 }}>
         같은 모델명 안에서 버전별 상태를 `Staging`, `Production`, `Archived`로 관리합니다.

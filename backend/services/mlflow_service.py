@@ -10,8 +10,16 @@ from mlflow.tracking import MlflowClient
 
 from config import settings
 
-VISIBLE_RUN_PREFIXES = ("compare::", "tune::", "finalize::", "backfill::")
-VISIBLE_ARTIFACT_SOURCES = {"compare_models", "tune_model", "finalize_model", "backfill"}
+VISIBLE_RUN_PREFIXES = ("compare::", "tune::", "blend::", "stack::", "automl::", "finalize::", "backfill::")
+VISIBLE_ARTIFACT_SOURCES = {
+    "compare_models",
+    "tune_model",
+    "blend_models",
+    "stack_models",
+    "automl",
+    "finalize_model",
+    "backfill",
+}
 
 
 def _configure_tracking() -> None:
@@ -21,6 +29,18 @@ def _configure_tracking() -> None:
 def get_client() -> MlflowClient:
     _configure_tracking()
     return MlflowClient()
+
+
+def close_active_runs(status: str = "FINISHED", limit: int = 10) -> list[str]:
+    _configure_tracking()
+    closed_run_ids = []
+    for _ in range(limit):
+        active = mlflow.active_run()
+        if active is None:
+            break
+        closed_run_ids.append(active.info.run_id)
+        mlflow.end_run(status=status)
+    return closed_run_ids
 
 
 def ensure_experiment(experiment_name: str) -> str:
@@ -86,6 +106,18 @@ def _is_user_visible_run(run) -> bool:
     return run_name.startswith(VISIBLE_RUN_PREFIXES) or artifact_source in VISIBLE_ARTIFACT_SOURCES
 
 
+def _dedupe_runs_by_name(runs) -> list:
+    seen = set()
+    rows = []
+    for run in runs:
+        run_name = run.data.tags.get("mlflow.runName") or run.info.run_id
+        if run_name in seen:
+            continue
+        seen.add(run_name)
+        rows.append(run)
+    return rows
+
+
 def list_experiments() -> list[dict]:
     client = get_client()
     experiments = client.search_experiments()
@@ -96,7 +128,7 @@ def list_experiments() -> list[dict]:
             max_results=100,
             order_by=["attribute.start_time DESC"],
         )
-        runs = [run for run in raw_runs if _is_user_visible_run(run)]
+        runs = _dedupe_runs_by_name([run for run in raw_runs if _is_user_visible_run(run)])
         latest_run = runs[0] if runs else None
         payload.append(
             {
@@ -123,10 +155,10 @@ def list_experiment_runs(experiment_id: str, max_results: int = 20) -> list[dict
     client = get_client()
     raw_runs = client.search_runs(
         experiment_ids=[experiment_id],
-        max_results=max_results * 5,
+        max_results=max_results * 10,
         order_by=["attribute.start_time DESC"],
     )
-    runs = [run for run in raw_runs if _is_user_visible_run(run)][:max_results]
+    runs = _dedupe_runs_by_name([run for run in raw_runs if _is_user_visible_run(run)])[:max_results]
     payload = []
     for run in runs:
         metrics = {key: round(float(value), 4) for key, value in run.data.metrics.items()}
@@ -183,10 +215,11 @@ def log_sklearn_model_run(
 ) -> dict:
     _configure_tracking()
     experiment_id = ensure_experiment(experiment_name)
+    close_active_runs()
     with mlflow.start_run(
         experiment_id=experiment_id,
         run_name=run_name,
-        nested=mlflow.active_run() is not None,
+        nested=False,
     ) as run:
         if tags:
             mlflow.set_tags({key: str(value) for key, value in tags.items() if value is not None})
@@ -197,7 +230,10 @@ def log_sklearn_model_run(
         if payload_metrics:
             mlflow.log_metrics(payload_metrics)
         mlflow.sklearn.log_model(model, artifact_path="model", input_example=input_example)
-        return {"run_id": run.info.run_id, "experiment_id": experiment_id}
+    current = get_client().get_run(run.info.run_id)
+    if current.info.status == "RUNNING":
+        get_client().set_terminated(run.info.run_id, status="FINISHED")
+    return {"run_id": run.info.run_id, "experiment_id": experiment_id}
 
 
 def _wait_for_model_version(model_name: str, version: int, timeout_seconds: int = 30) -> None:

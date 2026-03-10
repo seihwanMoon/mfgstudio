@@ -1,5 +1,25 @@
 import { formatDateTimeKST, formatMetricValue, formatRunStatus } from "../../utils/formatters"
 
+function ComparisonRow({ label, values }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `180px repeat(${values.length}, minmax(0, 1fr))`,
+        gap: 10,
+        padding: "12px 14px",
+        borderTop: "1px solid var(--border)",
+        color: "var(--text-secondary)",
+      }}
+    >
+      <span>{label}</span>
+      {values.map((value, index) => (
+        <span key={`${label}-${index}`}>{value}</span>
+      ))}
+    </div>
+  )
+}
+
 export default function ExperimentCompareView({ experiments = [] }) {
   const sample = experiments.slice(0, 3)
   const metricKeys = [...new Set(sample.flatMap((row) => Object.keys(row.latest_metrics || {})))]
@@ -66,37 +86,9 @@ export default function ExperimentCompareView({ experiments = [] }) {
               ))}
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: `180px repeat(${sample.length}, minmax(0, 1fr))`,
-                gap: 10,
-                padding: "12px 14px",
-                borderTop: "1px solid var(--border)",
-                color: "var(--text-secondary)",
-              }}
-            >
-              <span>최근 run</span>
-              {sample.map((row) => (
-                <span key={`${row.experiment_id}-run`}>{row.latest_run_name || "-"}</span>
-              ))}
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: `180px repeat(${sample.length}, minmax(0, 1fr))`,
-                gap: 10,
-                padding: "12px 14px",
-                borderTop: "1px solid var(--border)",
-                color: "var(--text-secondary)",
-              }}
-            >
-              <span>최근 상태</span>
-              {sample.map((row) => (
-                <span key={`${row.experiment_id}-status`}>{formatRunStatus(row.latest_run_status)}</span>
-              ))}
-            </div>
+            <ComparisonRow label="최근 run" values={sample.map((row) => row.latest_run_name || "-")} />
+            <ComparisonRow label="최근 상태" values={sample.map((row) => formatRunStatus(row.latest_run_status))} />
+            <ComparisonRow label="최근 시각" values={sample.map((row) => formatDateTimeKST(row.latest_start_time))} />
 
             {!metricKeys.length ? (
               <div style={{ padding: 14, borderTop: "1px solid var(--border)", color: "var(--text-secondary)" }}>
@@ -104,24 +96,11 @@ export default function ExperimentCompareView({ experiments = [] }) {
               </div>
             ) : (
               metricKeys.map((metric) => (
-                <div
+                <ComparisonRow
                   key={metric}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: `180px repeat(${sample.length}, minmax(0, 1fr))`,
-                    gap: 10,
-                    padding: "12px 14px",
-                    borderTop: "1px solid var(--border)",
-                    color: "var(--text-secondary)",
-                  }}
-                >
-                  <span>{metric}</span>
-                  {sample.map((row) => (
-                    <span key={`${row.experiment_id}-${metric}`}>
-                      {formatMetricValue(row.latest_metrics?.[metric])}
-                    </span>
-                  ))}
-                </div>
+                  label={metric}
+                  values={sample.map((row) => formatMetricValue(row.latest_metrics?.[metric]))}
+                />
               ))
             )}
           </div>

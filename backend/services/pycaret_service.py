@@ -1,6 +1,7 @@
 import base64
 import json
 from pathlib import Path
+import re
 
 import matplotlib
 from matplotlib import pyplot as plt
@@ -58,6 +59,11 @@ def _sanitize_column_name(name: str) -> str:
 
 def _slugify_algorithm(name: str) -> str:
     return _sanitize_column_name(name).lower().replace(" ", "_")
+
+
+def _humanize_estimator_name(name: str) -> str:
+    spaced = re.sub(r"(?<!^)(?=[A-Z])", " ", str(name)).replace("_", " ")
+    return _sanitize_column_name(spaced)
 
 
 def _experiment_dir(experiment_id: int) -> Path:
@@ -428,6 +434,43 @@ def _resolve_model_id(context: dict, algorithm: str) -> str:
     return context.get("name_to_id", {}).get(algorithm, algorithm)
 
 
+def _get_candidate_model(context: dict, algorithm: str):
+    pc = context["pc"]
+    model = (
+        context["tuned_models"].get(algorithm)
+        or context["trained_models"].get(algorithm)
+        or context["final_models"].get(algorithm)
+    )
+    if model is None:
+        model = pc.create_model(_resolve_model_id(context, algorithm), verbose=False)
+        context["trained_models"][algorithm] = model
+    return model
+
+
+def _require_supervised_module(context: dict) -> None:
+    if context["module_type"] not in {"classification", "regression"}:
+        raise ValueError("blend/stack/automl is only supported for classification and regression experiments")
+
+
+def _log_generated_candidate(context: dict, *, algorithm: str, run_prefix: str, model, metrics: dict, extra_params: dict, extra_tags: dict) -> dict:
+    run_info = log_sklearn_model_run(
+        experiment_name=context["experiment_name"],
+        run_name=f"{run_prefix}::{algorithm}",
+        model=model,
+        metrics=metrics,
+        params=_build_mlflow_params(context.get("params"), extra_params),
+        tags={
+            "module_type": context["module_type"],
+            "algorithm": algorithm,
+            **extra_tags,
+        },
+        input_example=context.get("input_example"),
+    )
+    context["run_ids"][algorithm] = run_info["run_id"]
+    context["mlflow_experiment_id"] = run_info["experiment_id"]
+    return run_info
+
+
 def _clean_metrics(row: pd.Series) -> dict:
     metrics = {}
     for key, value in row.items():
@@ -658,6 +701,147 @@ def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | Non
         "after_metrics": after_metrics,
         "changed_params": _diff_params(base_model.get_params(), tuned_model.get_params()),
         "trials": _extract_trials(tuner),
+        "run_id": run_info["run_id"],
+        "mlflow_experiment_id": run_info["experiment_id"],
+    }
+
+
+def blend_models_real(experiment_id: int, algorithms: list[str], options: dict | None = None) -> dict:
+    options = options or {}
+    context = _activate_experiment(experiment_id)
+    _require_supervised_module(context)
+    if len(algorithms) < 2:
+        raise ValueError("blend_models requires at least 2 candidate models")
+
+    pc = context["pc"]
+    estimator_list = [_get_candidate_model(context, algorithm) for algorithm in algorithms]
+    blend_model = pc.blend_models(
+        estimator_list=estimator_list,
+        optimize=options.get("optimize") or _default_sort_key(context["module_type"]),
+        choose_better=bool(options.get("choose_better", True)),
+        verbose=False,
+    )
+    after_frame = pc.pull().copy()
+    algorithm_label = f"Blend Ensemble ({len(algorithms)})"
+    context["trained_models"][algorithm_label] = blend_model
+    _cache_model_artifact(context, "trained", algorithm_label, blend_model)
+    metrics = _extract_summary_metrics(after_frame)
+    run_info = _log_generated_candidate(
+        context,
+        algorithm=algorithm_label,
+        run_prefix="blend",
+        model=blend_model,
+        metrics=metrics,
+        extra_params={
+            "blend_members": algorithms,
+            "blend_optimize": options.get("optimize") or _default_sort_key(context["module_type"]),
+            "blend_choose_better": bool(options.get("choose_better", True)),
+        },
+        extra_tags={
+            "artifact_source": "blend_models",
+            "member_algorithms": ", ".join(algorithms),
+        },
+    )
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
+    return {
+        "operation": "blend",
+        "algorithm": algorithm_label,
+        "members": algorithms,
+        "after_metrics": metrics,
+        "run_id": run_info["run_id"],
+        "mlflow_experiment_id": run_info["experiment_id"],
+    }
+
+
+def stack_models_real(experiment_id: int, algorithms: list[str], options: dict | None = None) -> dict:
+    options = options or {}
+    context = _activate_experiment(experiment_id)
+    _require_supervised_module(context)
+    if len(algorithms) < 2:
+        raise ValueError("stack_models requires at least 2 candidate models")
+
+    pc = context["pc"]
+    estimator_list = [_get_candidate_model(context, algorithm) for algorithm in algorithms]
+    stack_model = pc.stack_models(
+        estimator_list=estimator_list,
+        optimize=options.get("optimize") or _default_sort_key(context["module_type"]),
+        choose_better=bool(options.get("choose_better", True)),
+        verbose=False,
+    )
+    after_frame = pc.pull().copy()
+    algorithm_label = f"Stack Ensemble ({len(algorithms)})"
+    context["trained_models"][algorithm_label] = stack_model
+    _cache_model_artifact(context, "trained", algorithm_label, stack_model)
+    metrics = _extract_summary_metrics(after_frame)
+    run_info = _log_generated_candidate(
+        context,
+        algorithm=algorithm_label,
+        run_prefix="stack",
+        model=stack_model,
+        metrics=metrics,
+        extra_params={
+            "stack_members": algorithms,
+            "stack_optimize": options.get("optimize") or _default_sort_key(context["module_type"]),
+            "stack_choose_better": bool(options.get("choose_better", True)),
+        },
+        extra_tags={
+            "artifact_source": "stack_models",
+            "member_algorithms": ", ".join(algorithms),
+        },
+    )
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
+    return {
+        "operation": "stack",
+        "algorithm": algorithm_label,
+        "members": algorithms,
+        "after_metrics": metrics,
+        "run_id": run_info["run_id"],
+        "mlflow_experiment_id": run_info["experiment_id"],
+    }
+
+
+def automl_best_real(experiment_id: int, options: dict | None = None) -> dict:
+    options = options or {}
+    context = _activate_experiment(experiment_id)
+    _require_supervised_module(context)
+
+    pc = context["pc"]
+    automl_model = pc.automl(
+        optimize=options.get("optimize") or _default_sort_key(context["module_type"]),
+        use_holdout=bool(options.get("use_holdout", False)),
+    )
+    after_frame = pc.pull().copy()
+    resolved_name = _humanize_estimator_name(type(automl_model).__name__)
+    algorithm_label = f"AutoML Best ({resolved_name})"
+    context["trained_models"][algorithm_label] = automl_model
+    _cache_model_artifact(context, "trained", algorithm_label, automl_model)
+    metrics = _extract_summary_metrics(after_frame)
+    run_info = _log_generated_candidate(
+        context,
+        algorithm=algorithm_label,
+        run_prefix="automl",
+        model=automl_model,
+        metrics=metrics,
+        extra_params={
+            "automl_optimize": options.get("optimize") or _default_sort_key(context["module_type"]),
+            "automl_use_holdout": bool(options.get("use_holdout", False)),
+            "automl_resolved_model": resolved_name,
+        },
+        extra_tags={
+            "artifact_source": "automl",
+            "resolved_model_name": resolved_name,
+        },
+    )
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
+    return {
+        "operation": "automl",
+        "algorithm": algorithm_label,
+        "members": [],
+        "resolved_model_name": resolved_name,
+        "after_metrics": metrics,
         "run_id": run_info["run_id"],
         "mlflow_experiment_id": run_info["experiment_id"],
     }

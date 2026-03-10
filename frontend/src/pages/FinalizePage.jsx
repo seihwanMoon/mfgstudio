@@ -12,7 +12,7 @@ import useStore from "../store/useStore"
 export default function FinalizePage() {
   const { currentExperimentId, selectedModelsForTune, setupParams } = useStore()
   const [models, setModels] = useState([])
-  const [selected, setSelected] = useState(null)
+  const [selectedId, setSelectedId] = useState("")
   const [finalizeResult, setFinalizeResult] = useState(null)
   const [registryName, setRegistryName] = useState("manufacturing_model")
   const [versions, setVersions] = useState([])
@@ -21,10 +21,19 @@ export default function FinalizePage() {
     if (!currentExperimentId) return
     trainAPI.getCompareResult(currentExperimentId).then((response) => {
       setModels(response)
-      const picked = response.find((item) => item.algorithm === selectedModelsForTune[0]) || response[0] || null
-      setSelected(picked)
+      const preferred = response.find((item) => item.algorithm === selectedModelsForTune[0]) || response[0] || null
+      setSelectedId(preferred ? String(preferred.id) : "")
     })
   }, [currentExperimentId, selectedModelsForTune])
+
+  useEffect(() => {
+    refreshVersions(registryName)
+  }, [registryName])
+
+  const selected = useMemo(
+    () => models.find((item) => String(item.id) === String(selectedId)) || null,
+    [models, selectedId]
+  )
 
   async function refreshVersions(name) {
     try {
@@ -70,8 +79,50 @@ export default function FinalizePage() {
   return (
     <div style={{ height: "100%", display: "grid", gridTemplateColumns: "1fr 380px", gap: 0 }}>
       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div
+          style={{
+            border: "1px solid #1A3352",
+            borderRadius: 14,
+            background: "#0D1926",
+            padding: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div style={{ color: "#E2EEFF", fontWeight: 700 }}>확정 대상 선택</div>
+          <select
+            value={selectedId}
+            onChange={(event) => setSelectedId(event.target.value)}
+            style={{
+              borderRadius: 8,
+              border: "1px solid #1A3352",
+              background: "#111E2E",
+              color: "#E2EEFF",
+              padding: "10px 12px",
+            }}
+          >
+            {models.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.algorithm}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <SelectedModelCard model={selected} />
-        <button onClick={handleFinalize} style={{ border: "none", borderRadius: 10, background: "#34D399", color: "#080F1A", padding: "12px 14px", fontWeight: 800, cursor: "pointer" }}>
+        <button
+          onClick={handleFinalize}
+          style={{
+            border: "none",
+            borderRadius: 10,
+            background: "#34D399",
+            color: "#080F1A",
+            padding: "12px 14px",
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
           finalize_model 실행
         </button>
         <SaveModelForm modelPath={finalizeResult?.model_path} />

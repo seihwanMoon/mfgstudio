@@ -89,6 +89,7 @@ const useStore = create((set) => ({
       compareResults: [...state.compareResults, row],
     })),
   clearCompareResults: () => set({ compareResults: [] }),
+  setCompareResults: (compareResults) => set({ compareResults }),
   addTuneTrial: (trial) =>
     set((state) => ({
       tuneTrials: [...state.tuneTrials, trial],
