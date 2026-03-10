@@ -9,6 +9,7 @@ import pandas as pd
 import shap
 
 from config import settings
+from services.mlflow_service import ensure_experiment, log_sklearn_model_run
 
 matplotlib.use("Agg")
 plt.rcParams["font.family"] = ["Malgun Gothic", "NanumGothic", "AppleGothic", "DejaVu Sans"]
@@ -103,7 +104,7 @@ def _build_setup_kwargs(df: pd.DataFrame, module_type: str, params: dict, experi
         "session_id": params.get("session_id", 42),
         "verbose": False,
         "html": False,
-        "log_experiment": False,
+        "log_experiment": bool(params.get("log_experiment", False)),
         "experiment_name": experiment_name,
     }
 
@@ -231,6 +232,11 @@ def _activate_experiment(experiment_id: int):
     context["pc"] = pc
     context["name_to_id"] = name_to_id
     context["id_to_name"] = id_to_name
+    if context["module_type"] in {"classification", "regression"}:
+        feature_frame = prepared_df.drop(columns=[prepared_params["target_col"]], errors="ignore")
+        context["input_example"] = feature_frame.head(1).copy()
+    else:
+        context["input_example"] = prepared_df.head(1).copy()
     return context
 
 
@@ -251,10 +257,11 @@ def run_setup(
     context = _activate_experiment(experiment_id)
     pc = context["pc"]
     transformed = pc.get_config("X_train_transformed")
+    context["mlflow_experiment_id"] = ensure_experiment(mlflow_experiment_name)
     return {
         "pipeline_steps": _extract_pipeline_steps(pc),
         "transformed_shape": list(transformed.shape),
-        "mlflow_experiment_id": None,
+        "mlflow_experiment_id": context["mlflow_experiment_id"],
         "mlflow_experiment_name": mlflow_experiment_name,
         "module_type": module_type,
     }
@@ -523,9 +530,25 @@ def finalize_model_real(experiment_id: int, algorithm: str, model_name: str, met
     save_path = Path(settings.model_dir) / model_name
     pc.save_model(final_model, str(save_path))
     context["final_models"][algorithm] = final_model
+    run_info = log_sklearn_model_run(
+        experiment_name=context["experiment_name"],
+        run_name=f"finalize::{model_name}",
+        model=final_model,
+        metrics=metrics or {},
+        params=context.get("params") or {},
+        tags={
+            "module_type": context["module_type"],
+            "algorithm": algorithm,
+            "artifact_source": "finalize_model",
+            "catalog_model_name": model_name,
+        },
+        input_example=context.get("input_example"),
+    )
     return {
         "model_path": str(save_path) + ".pkl",
         "final_metrics": metrics or {},
+        "run_id": run_info["run_id"],
+        "mlflow_experiment_id": run_info["experiment_id"],
     }
 
 

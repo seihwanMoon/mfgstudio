@@ -2,62 +2,92 @@
 
 Last updated: 2026-03-10
 
-## Current state
+## Current code state
 
-- GitHub `main` last pushed commit: `b0771cf feat: switch training flow to real pycaret runtime`
-- Local work completes the final remaining task: `S-02 docker compose up --build`
-- `PROGRESS.md` status is now `76 / 76`
-- Current working tree contains today's completion updates and is ready to commit
+- User-facing catalog has been normalized to `manufacturing_model` only.
+- Home dashboard, predict page, and in-app MLflow page all use the same filtered catalog logic.
+- Theme, XAI flow, SHAP, Korean plotting, and prediction schema handling have been updated after the original MVP completion.
+- Working tree is being advanced beyond the old Docker-complete milestone; do not rely on older handoff notes or older pushed commits.
 
-## What is already working
+## What is verified
 
-- Backend and frontend code paths are implemented.
-- Real PyCaret classification flow was smoke-tested locally in `.venv`:
-  - upload
-  - setup
-  - compare
-  - tune
-  - analyze plot
-  - SHAP interpret
-  - finalize
-  - registry register/stage
-  - single prediction
-- `npm run build` passed.
-- Python compile checks passed.
-- `docker compose up --build -d` now passes.
-- Runtime checks passed:
-  - `http://localhost:8000/health`
-  - `http://localhost:5000`
-  - `http://localhost:5273`
-
-## Docker status
-
-- Docker Desktop engine is running.
-- `docker compose config` passed.
-- `docker compose up --build -d` completed successfully.
-- Build blockers resolved:
-  - `pycaret 3.3.2` required `pandas < 2.2.0`
-  - `pycaret[full]` was narrowed to `pycaret` to avoid unnecessary extras in the backend image
-  - `shap` was aligned to `0.44.1`
-- `backend/requirements.txt` was updated to:
-  - `pycaret==3.3.2`
-  - `pandas==2.1.4`
-  - `shap==0.44.1`
-- Windows reserved the `2981-3080` port range on this machine, so the frontend host port was changed from `3000` to `5173`.
-
-## Current runtime entrypoints
-
+- `docker compose up --build -d`
 - Frontend: `http://localhost:5273`
-- Backend API: `http://localhost:8000`
-- MLflow: `http://localhost:5000`
+- Backend health: `http://localhost:8000/health`
+- MLflow UI: `http://localhost:5000`
+- `npm run build`
+- Python compile checks for updated backend modules
+- Real PyCaret flow for upload, setup, compare, tune, analyze, finalize, register, and predict
 
-## Next recommended action
+## Important runtime facts
 
-Commit and push today's completion work:
+- Browser console `chrome-extension://... postMessage` errors reported by the user were traced to a browser extension, not this app.
+- Current visible production-style catalog was intentionally reduced so demo/sample models no longer appear in:
+  - home dashboard
+  - predict model dropdown
+  - app-side MLflow management page
+
+## Recent major fixes
+
+### UX and flow
+
+- Blue light/dark theme added
+- Upload CORS issue fixed
+- Regression compare/tune flow corrected
+- Compare recommendation badge and radar chart improved
+- Predict form changed from static sample fields to real model-schema-driven inputs
+
+### Analyze / XAI
+
+- Plot options now depend on module type
+- SHAP target leakage bug fixed
+- Korean column names normalized
+- matplotlib Korean font fallback configured
+
+### Catalog / operations
+
+- Finalized-model-only prediction selection
+- User-facing demo/test models hidden
+- Home/dashboard numbers aligned to active catalog entries
+- App-side MLflow registry view filtered to versioned models only
+
+## Current architectural state
+
+The major MLflow gap has been closed.
+
+Current reality:
+
+- `finalize_model()` writes a real MLflow run
+- `register` creates a real MLflow registered model version
+- `stage/rollback` sync to real MLflow Registry
+- Existing `manufacturing_model` versions were backfilled into MLflow
+- `manufacturing_model v3` is now `Production`
+
+Remaining next target:
+
+1. Compare / tune 단계의 run ID를 실제 MLflow run과 더 정밀하게 연결
+2. 앱 내부 MLflow 비교 화면을 실제 experiment/run 기준으로 확장
+3. 운영 리포트와 drift 결과를 실제 MLflow artifact/tag와 더 강하게 연결
+
+## Files most relevant for the next step
+
+- [backend/services/mlflow_service.py](D:/GITHUB/mfgstudio/backend/services/mlflow_service.py)
+- [backend/services/pycaret_service.py](D:/GITHUB/mfgstudio/backend/services/pycaret_service.py)
+- [backend/routers/train.py](D:/GITHUB/mfgstudio/backend/routers/train.py)
+- [backend/routers/registry.py](D:/GITHUB/mfgstudio/backend/routers/registry.py)
+- [backend/services/model_catalog_service.py](D:/GITHUB/mfgstudio/backend/services/model_catalog_service.py)
+- [PROGRESS.md](D:/GITHUB/mfgstudio/PROGRESS.md)
+
+## Recommended immediate action
+
+Continue with MLflow observability refinement and then verify:
 
 ```powershell
 cd D:\GITHUB\mfgstudio
-git add .
-git commit -m "chore: finalize docker runtime verification"
-git push
+docker compose up --build -d
 ```
+
+After implementation, verify both:
+
+- app-side MLflow page
+- real MLflow UI at `http://localhost:5000`

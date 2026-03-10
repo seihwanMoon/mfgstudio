@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.trained_model import TrainedModel
 from services.model_catalog_service import get_catalog_entries
-from services.mlflow_service import get_all_registered_models
+from services.mlflow_service import (
+    get_all_registered_models,
+    register_run_model,
+    transition_model_stage,
+)
 
 router = APIRouter()
 
@@ -63,20 +67,30 @@ def register_model(payload: RegisterRequest, db: Session = Depends(get_db)):
     if not model:
         raise HTTPException(status_code=404, detail="해당 run_id의 모델을 찾을 수 없습니다.")
 
-    current_max = (
-        db.query(func.max(TrainedModel.mlflow_version))
-        .filter(TrainedModel.mlflow_model_name == payload.model_name)
-        .scalar()
-        or 0
-    )
+    mlflow_synced = False
+    version = None
+    try:
+        registered = register_run_model(payload.model_name, payload.run_id, description="Manufacturing AI Studio model")
+        version = registered["version"]
+        mlflow_synced = True
+    except Exception:
+        current_max = (
+            db.query(func.max(TrainedModel.mlflow_version))
+            .filter(TrainedModel.mlflow_model_name == payload.model_name)
+            .scalar()
+            or 0
+        )
+        version = int(current_max) + 1
+
     model.mlflow_model_name = payload.model_name
-    model.mlflow_version = int(current_max) + 1
+    model.mlflow_version = int(version)
     model.stage = model.stage or "None"
     db.commit()
     return {
         "name": payload.model_name,
         "version": model.mlflow_version,
         "run_id": payload.run_id,
+        "mlflow_synced": mlflow_synced,
     }
 
 
@@ -85,7 +99,7 @@ def get_versions(model_name: str, db: Session = Depends(get_db)):
     models = (
         db.query(TrainedModel)
         .filter(TrainedModel.mlflow_model_name == model_name)
-        .order_by(TrainedModel.mlflow_version.desc())
+        .order_by(TrainedModel.mlflow_version.desc(), TrainedModel.id.desc())
         .all()
     )
     return [
@@ -98,6 +112,7 @@ def get_versions(model_name: str, db: Session = Depends(get_db)):
             "run_id": model.mlflow_run_id,
         }
         for model in models
+        if model.mlflow_version is not None
     ]
 
 
@@ -117,8 +132,14 @@ def change_stage(model_name: str, payload: StageRequest, db: Session = Depends(g
                 model.stage = "Archived"
 
     target.stage = payload.stage
+    mlflow_synced = False
+    try:
+        transition_model_stage(model_name, payload.version, payload.stage)
+        mlflow_synced = True
+    except Exception:
+        mlflow_synced = False
     db.commit()
-    return {"name": model_name, "version": payload.version, "stage": payload.stage}
+    return {"name": model_name, "version": payload.version, "stage": payload.stage, "mlflow_synced": mlflow_synced}
 
 
 @router.post("/{model_name}/rollback")
@@ -135,5 +156,12 @@ def rollback(model_name: str, payload: RollbackRequest, db: Session = Depends(ge
         if model.id != target.id and model.stage == "Production":
             model.stage = "Archived"
     target.stage = "Production"
+
+    mlflow_synced = False
+    try:
+        transition_model_stage(model_name, payload.version, "Production")
+        mlflow_synced = True
+    except Exception:
+        mlflow_synced = False
     db.commit()
-    return {"model_name": model_name, "restored_version": payload.version}
+    return {"model_name": model_name, "restored_version": payload.version, "mlflow_synced": mlflow_synced}

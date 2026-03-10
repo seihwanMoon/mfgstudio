@@ -308,10 +308,12 @@ def finalize_model(model_id: int, db: Session = Depends(get_db)):
 
     model.model_path = result["model_path"]
     model.metrics = json.dumps(result["final_metrics"], ensure_ascii=False)
+    model.mlflow_run_id = result["run_id"]
+    experiment.mlflow_exp_id = str(result["mlflow_experiment_id"])
     db.commit()
     return {
         "model_id": model.id,
         "model_path": model.model_path,
         "final_metrics": result["final_metrics"],
-        "run_id": model.mlflow_run_id,
+        "run_id": result["run_id"],
     }

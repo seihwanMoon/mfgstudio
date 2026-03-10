@@ -241,6 +241,11 @@ All planned tasks are currently complete.
 |------|------|-------|
 | 2026-03-09 | Setup bootstrap, FastAPI/React foundations, dashboard/upload/setup/compare/tune flows, analyze/finalize/predict/registry/MLflow screens, drift/schedule/report backend, real PyCaret classification flow, and `PROGRESS.md` normalization | Codex |
 | 2026-03-10 | Docker runtime verification completed, backend dependency alignment applied for PyCaret image builds, and Docker frontend host port shifted to `5173` to avoid Windows reserved port range conflicts | Codex |
+| 2026-03-10 | Light/dark blue theme applied, CORS upload issue fixed, regression compare/tune flow corrected, compare recommendation and radar chart improved, and tune fallback changed to `scikit-learn` when Optuna is unavailable | Codex |
+| 2026-03-10 | Analyze/XAI flow refined with module-aware plot lists, SHAP target leakage fixed, Korean matplotlib font handling added, and normalized feature labels introduced for plots and explanations | Codex |
+| 2026-03-10 | Prediction flow changed to finalized-model-only selection, dynamic schema-based single prediction forms, registry/predict/home catalog filtering, and user-facing demo/test models hidden from dashboard, predict, and app MLflow pages | Codex |
+| 2026-03-10 | App-side MLflow registry list filtered to versioned models only; actual MLflow server integration identified as the next architectural gap because the app UI and real MLflow UI are still only partially synchronized | Codex |
+| 2026-03-10 | Real MLflow synchronization added for finalize/register/stage flows, `manufacturing_model` versions 1-3 were backfilled into the actual MLflow Registry, and `manufacturing_model v3` was promoted to `Production` in both app state and MLflow | Codex |
 
 ---
 
@@ -260,3 +265,8 @@ Resolution: The frontend Docker host port was moved to `5173`, backend CORS was 
 Symptom: WeasyPrint emitted Fontconfig warnings during local PDF generation on Windows.
 Cause: Local font configuration is incomplete in the current environment.
 Resolution: PDF output was still generated successfully. Keep as a non-blocking environment warning unless rendering quality issues appear.
+
+### [2026-03-10] App UI vs actual MLflow server mismatch
+Symptom: The in-app MLflow management screen showed versioned models, but the real MLflow UI at `http://localhost:5000` remained empty.
+Cause: The app had local DB-based registry/state handling, while real MLflow run logging and registry registration were not yet wired into the finalize/register flow.
+Resolution: Resolved. Finalize now logs real MLflow runs, register/stage flows sync with real MLflow Registry, and a backfill script seeded the visible `manufacturing_model` versions into MLflow.
