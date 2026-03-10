@@ -100,9 +100,16 @@ export default function SetupPage() {
           <Button variant="outline" onClick={() => navigate("/upload")}>
             업로드로 이동
           </Button>
-          <Button onClick={handleSetup} disabled={loading}>
-            {loading ? "setup() 실행 중..." : "setup() 실행"}
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {result ? (
+              <Button variant="outline" onClick={() => navigate("/compare")}>
+                다음: 모델 비교
+              </Button>
+            ) : null}
+            <Button onClick={handleSetup} disabled={loading}>
+              {loading ? "setup() 실행 중..." : "setup() 실행"}
+            </Button>
+          </div>
         </div>
       </div>
 

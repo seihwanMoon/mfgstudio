@@ -5,6 +5,18 @@ const getInitialTheme = () => {
   return localStorage.getItem("mfgstudio-theme") || "dark"
 }
 
+export const COMPARE_SORT_OPTIONS = {
+  classification: ["Accuracy", "AUC", "F1", "Recall", "Precision"],
+  regression: ["R2", "RMSE", "MAE", "MSE", "MAPE"],
+  clustering: ["Silhouette", "Calinski-Harabasz", "Davies-Bouldin"],
+  anomaly: ["AUC", "Recall", "Precision"],
+  timeseries: ["MAE", "RMSE", "MAPE", "SMAPE"],
+}
+
+export function getDefaultCompareSort(moduleType) {
+  return COMPARE_SORT_OPTIONS[moduleType]?.[0] || "Accuracy"
+}
+
 const useStore = create((set) => ({
   theme: getInitialTheme(),
   currentDatasetId: null,
@@ -34,7 +46,7 @@ const useStore = create((set) => ({
     log_plots: true,
   },
   compareOptions: {
-    sort: "Accuracy",
+    sort: getDefaultCompareSort("classification"),
     n_select: 3,
     budget_time: null,
     exclude: [],
@@ -63,6 +75,13 @@ const useStore = create((set) => ({
       compareOptions: {
         ...state.compareOptions,
         [key]: value,
+      },
+    })),
+  resetCompareOptions: (moduleType) =>
+    set((state) => ({
+      compareOptions: {
+        ...state.compareOptions,
+        sort: getDefaultCompareSort(moduleType),
       },
     })),
   addCompareResult: (row) =>
