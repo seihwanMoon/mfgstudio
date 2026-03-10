@@ -1,18 +1,31 @@
 import useStore from "../../store/useStore"
 
+const METRIC_PRIORITY = {
+  classification: ["Accuracy", "AUC", "F1", "Recall", "Precision"],
+  regression: ["R2", "RMSE", "MAE", "MSE", "MAPE", "RMSLE"],
+  clustering: ["Silhouette", "Calinski-Harabasz", "Davies-Bouldin"],
+  anomaly: ["AUC", "Recall", "Precision"],
+  timeseries: ["MAE", "RMSE", "MAPE", "SMAPE"],
+}
+
 export default function LeaderboardTable({ results = [] }) {
-  const { selectedModelsForTune, toggleSelectModel } = useStore()
+  const { selectedModelsForTune, toggleSelectModel, setupParams } = useStore()
+  const moduleType = setupParams.module_type || "classification"
+  const metricsFromRows = Array.from(new Set(results.flatMap((row) => Object.keys(row.metrics || {}))))
+  const metricKeys = [
+    ...(METRIC_PRIORITY[moduleType] || []).filter((metric) => metricsFromRows.includes(metric)),
+    ...metricsFromRows.filter((metric) => !(METRIC_PRIORITY[moduleType] || []).includes(metric)),
+  ].slice(0, 5)
+  const gridTemplateColumns = `40px 2fr repeat(${metricKeys.length}, 1fr) 90px`
 
   return (
-    <div style={{ border: "1px solid #1A3352", borderRadius: 14, overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "40px 2fr repeat(5, 1fr) 90px", gap: 10, padding: "10px 14px", background: "#111E2E", color: "#5A7A9A", fontSize: 10 }}>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)" }}>
+      <div style={{ display: "grid", gridTemplateColumns, gap: 10, padding: "10px 14px", background: "var(--bg-surface-strong)", color: "var(--text-soft)", fontSize: 10 }}>
         <span />
         <span>알고리즘</span>
-        <span>Accuracy</span>
-        <span>AUC</span>
-        <span>F1</span>
-        <span>Recall</span>
-        <span>Precision</span>
+        {metricKeys.map((metric) => (
+          <span key={metric}>{metric}</span>
+        ))}
         <span>TT(s)</span>
       </div>
       {results.map((row, index) => {
@@ -22,21 +35,19 @@ export default function LeaderboardTable({ results = [] }) {
             key={row.algorithm}
             style={{
               display: "grid",
-              gridTemplateColumns: "40px 2fr repeat(5, 1fr) 90px",
+              gridTemplateColumns,
               gap: 10,
               padding: "12px 14px",
-              borderTop: "1px solid #1A3352",
-              background: index === 0 ? "rgba(251, 191, 36, 0.08)" : "#0D1926",
+              borderTop: "1px solid var(--border)",
+              background: index === 0 ? "rgba(217, 154, 17, 0.08)" : "var(--bg-surface)",
               alignItems: "center",
             }}
           >
             <input type="checkbox" checked={selected} onChange={() => toggleSelectModel(row.algorithm)} />
-            <div style={{ color: index === 0 ? "#FBBF24" : "#E2EEFF", fontWeight: 700 }}>{row.algorithm}</div>
-            <Metric value={row.metrics?.Accuracy} />
-            <Metric value={row.metrics?.AUC} />
-            <Metric value={row.metrics?.F1} />
-            <Metric value={row.metrics?.Recall} />
-            <Metric value={row.metrics?.Precision} />
+            <div style={{ color: index === 0 ? "var(--warning)" : "var(--text-primary)", fontWeight: 700 }}>{row.algorithm}</div>
+            {metricKeys.map((metric) => (
+              <Metric key={metric} value={row.metrics?.[metric]} />
+            ))}
             <Metric value={row.tt_sec} />
           </div>
         )
@@ -46,5 +57,6 @@ export default function LeaderboardTable({ results = [] }) {
 }
 
 function Metric({ value }) {
-  return <span style={{ color: "#8BA8C8", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{value ?? "—"}</span>
+  const normalized = typeof value === "number" ? Number(value.toFixed(4)) : value
+  return <span style={{ color: "var(--text-secondary)", fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>{normalized ?? "-"}</span>
 }
