@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 import matplotlib
+from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import shap
@@ -10,6 +11,8 @@ import shap
 from config import settings
 
 matplotlib.use("Agg")
+plt.rcParams["font.family"] = ["Malgun Gothic", "NanumGothic", "AppleGothic", "DejaVu Sans"]
+plt.rcParams["axes.unicode_minus"] = False
 
 
 MODULE_LIBRARY = {
@@ -120,6 +123,7 @@ def _prepare_training_frame(df: pd.DataFrame, params: dict, context: dict) -> tu
     prepared_params = dict(params)
     target_col = prepared_params.get("target_col")
     context["target_alias"] = None
+    context["target_original"] = target_col
 
     if target_col and target_col in prepared_df.columns and _requires_safe_target_alias(target_col):
         alias = "__target__"
@@ -127,7 +131,7 @@ def _prepare_training_frame(df: pd.DataFrame, params: dict, context: dict) -> tu
         while alias in prepared_df.columns:
             alias = f"__target__{suffix}"
             suffix += 1
-        prepared_df[alias] = prepared_df[target_col]
+        prepared_df = prepared_df.rename(columns={target_col: alias})
         prepared_params["target_col"] = alias
         context["target_alias"] = alias
 
@@ -415,7 +419,15 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
     for png_file in Path(".").glob("*.png"):
         png_file.unlink(missing_ok=True)
 
-    pc.plot_model(model, plot=plot_type, save=True, verbose=False)
+    plot_kwargs = {
+        "plot": plot_type,
+        "save": True,
+        "verbose": False,
+    }
+    try:
+        pc.plot_model(model, use_train_data=use_train_data, **plot_kwargs)
+    except TypeError:
+        pc.plot_model(model, **plot_kwargs)
     files = sorted(Path(".").glob("*.png"), key=lambda item: item.stat().st_mtime)
     if not files:
         return ""

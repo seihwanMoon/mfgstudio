@@ -1,19 +1,47 @@
 export default function ShapIndexSelector({ value, onChange, onAnalyze }) {
   return (
-    <div style={{ border: "1px solid #1A3352", borderRadius: 14, background: "#0D1926", padding: 14 }}>
-      <div style={{ color: "#E2EEFF", fontWeight: 700, marginBottom: 10 }}>SHAP Index 선택</div>
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 18,
+        background: "var(--bg-surface)",
+        boxShadow: "var(--shadow-panel)",
+        padding: 16,
+      }}
+    >
+      <div style={{ color: "var(--text-primary)", fontWeight: 700, marginBottom: 8 }}>SHAP 분석 행 선택</div>
+      <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
+        테스트 데이터의 몇 번째 행을 설명할지 입력합니다. 예: `0`은 첫 번째 샘플입니다.
+      </div>
       <input
         type="number"
         min="0"
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        style={{ width: "100%", borderRadius: 8, border: "1px solid #1A3352", background: "#111E2E", color: "#E2EEFF", padding: "10px 12px", marginBottom: 10 }}
+        style={{
+          width: "100%",
+          borderRadius: 12,
+          border: "1px solid var(--border)",
+          background: "var(--bg-surface-soft)",
+          color: "var(--text-primary)",
+          padding: "12px 14px",
+          marginBottom: 12,
+        }}
       />
       <button
         onClick={onAnalyze}
-        style={{ width: "100%", border: "none", borderRadius: 10, background: "#34D399", color: "#080F1A", padding: "12px 14px", fontWeight: 800, cursor: "pointer" }}
+        style={{
+          width: "100%",
+          border: "none",
+          borderRadius: 12,
+          background: "var(--success)",
+          color: "white",
+          padding: "13px 14px",
+          fontWeight: 800,
+          cursor: "pointer",
+        }}
       >
-        SHAP 분석
+        SHAP 분석 실행
       </button>
     </div>
   )

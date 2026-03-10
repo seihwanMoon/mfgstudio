@@ -4,6 +4,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     curl \
+    fonts-nanum \
     libgomp1 \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \

@@ -3,15 +3,16 @@ export default function TrainTestToggle({ value, onChange }) {
     <button
       onClick={() => onChange(!value)}
       style={{
-        borderRadius: 10,
-        border: `1px solid ${value ? "#A78BFA" : "#1A3352"}`,
-        background: value ? "rgba(167, 139, 250, 0.12)" : "#0D1926",
-        color: value ? "#A78BFA" : "#8BA8C8",
-        padding: "10px 12px",
+        borderRadius: 12,
+        border: `1px solid ${value ? "var(--accent-blue)" : "var(--border)"}`,
+        background: value ? "var(--accent-blue-soft)" : "var(--bg-surface-soft)",
+        color: value ? "var(--accent-blue-strong)" : "var(--text-secondary)",
+        padding: "12px 14px",
         cursor: "pointer",
+        fontWeight: 700,
       }}
     >
-      {value ? "Train Data" : "Test Data"}
+      {value ? "학습 데이터 기준" : "테스트 데이터 기준"}
     </button>
   )
 }
