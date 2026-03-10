@@ -32,7 +32,10 @@ def list_registered_models(db: Session = Depends(get_db)):
 
     grouped = (
         db.query(TrainedModel.mlflow_model_name)
-        .filter(TrainedModel.mlflow_model_name.isnot(None))
+        .filter(
+            TrainedModel.mlflow_model_name.isnot(None),
+            TrainedModel.mlflow_version.isnot(None),
+        )
         .distinct()
         .all()
     )
@@ -40,7 +43,10 @@ def list_registered_models(db: Session = Depends(get_db)):
     for (name,) in grouped:
         versions = (
             db.query(TrainedModel)
-            .filter(TrainedModel.mlflow_model_name == name)
+            .filter(
+                TrainedModel.mlflow_model_name == name,
+                TrainedModel.mlflow_version.isnot(None),
+            )
             .order_by(TrainedModel.mlflow_version.desc())
             .all()
         )
@@ -55,14 +61,14 @@ def list_registered_models(db: Session = Depends(get_db)):
                 "production_version": production.mlflow_version if production else None,
             }
         )
-    return results
+    return sorted(results, key=lambda item: (-(item["latest_versions"][0] or 0), item["name"]))
 
 
 @router.post("/register")
 def register_model(payload: RegisterRequest, db: Session = Depends(get_db)):
     model = db.query(TrainedModel).filter(TrainedModel.mlflow_run_id == payload.run_id).first()
     if not model:
-        raise HTTPException(status_code=404, detail="run_id에 해당하는 모델을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="해당 run_id의 모델을 찾을 수 없습니다.")
 
     current_max = (
         db.query(func.max(TrainedModel.mlflow_version))
@@ -106,11 +112,11 @@ def get_versions(model_name: str, db: Session = Depends(get_db)):
 def change_stage(model_name: str, payload: StageRequest, db: Session = Depends(get_db)):
     models = db.query(TrainedModel).filter(TrainedModel.mlflow_model_name == model_name).all()
     if not models:
-        raise HTTPException(status_code=404, detail="등록된 모델이 없습니다")
+        raise HTTPException(status_code=404, detail="등록된 모델이 없습니다.")
 
     target = next((model for model in models if model.mlflow_version == payload.version), None)
     if not target:
-        raise HTTPException(status_code=404, detail="버전을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="버전을 찾을 수 없습니다.")
 
     if payload.stage == "Production":
         for model in models:
@@ -126,11 +132,11 @@ def change_stage(model_name: str, payload: StageRequest, db: Session = Depends(g
 def rollback(model_name: str, payload: RollbackRequest, db: Session = Depends(get_db)):
     models = db.query(TrainedModel).filter(TrainedModel.mlflow_model_name == model_name).all()
     if not models:
-        raise HTTPException(status_code=404, detail="등록된 모델이 없습니다")
+        raise HTTPException(status_code=404, detail="등록된 모델이 없습니다.")
 
     target = next((model for model in models if model.mlflow_version == payload.version), None)
     if not target:
-        raise HTTPException(status_code=404, detail="버전을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="버전을 찾을 수 없습니다.")
 
     for model in models:
         if model.id != target.id and model.stage == "Production":

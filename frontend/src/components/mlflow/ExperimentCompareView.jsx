@@ -1,14 +1,15 @@
 export default function ExperimentCompareView({ rows = [] }) {
   const sample = rows.slice(0, 2)
+
   return (
-    <div style={{ border: "1px solid #1A3352", borderRadius: 14, background: "#0D1926", padding: 16 }}>
-      <div style={{ color: "#E2EEFF", fontWeight: 700, marginBottom: 10 }}>실험 비교</div>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 18, background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)", padding: 16 }}>
+      <div style={{ color: "var(--text-primary)", fontWeight: 800, marginBottom: 10 }}>운영 모델 비교</div>
       {sample.length < 2 ? (
-        <div style={{ color: "#8BA8C8" }}>비교할 모델이 충분하지 않습니다.</div>
+        <div style={{ color: "var(--text-secondary)" }}>비교할 등록 모델이 아직 충분하지 않습니다.</div>
       ) : (
         sample.map((row) => (
-          <div key={row.name} style={{ borderTop: "1px solid #1A3352", paddingTop: 8, color: "#8BA8C8" }}>
-            {row.name} · latest {row.latest_versions?.[0] ?? "—"}
+          <div key={row.name} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, color: "var(--text-secondary)" }}>
+            {row.name} · latest {row.latest_versions?.[0] ?? "-"}
           </div>
         ))
       )}
