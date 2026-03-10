@@ -19,7 +19,9 @@ export default function StagingAlertBar({ count = 0 }) {
         gap: 12,
       }}
     >
-      <div style={{ fontSize: 13 }}>Staging 대기 모델이 {count}개 있습니다. 현재 구현에서는 Production 상태만 운영 카드에 표시됩니다.</div>
+      <div style={{ fontSize: 13 }}>
+        Staging 상태 모델이 {count}개 있습니다. 운영 반영 전 검토가 필요한 모델입니다.
+      </div>
       <Button variant="outline" color="#34D399">
         레지스트리 보기
       </Button>

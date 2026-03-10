@@ -1,5 +1,5 @@
-import Badge from "../ui/Badge"
 import DriftGauge from "../charts/DriftGauge"
+import Badge from "../ui/Badge"
 
 export default function ModelCard({ model, selected, onSelect }) {
   const score = model.metrics?.Accuracy ?? model.metrics?.accuracy ?? model.metrics?.R2 ?? model.metrics?.r2 ?? "-"
@@ -22,8 +22,8 @@ export default function ModelCard({ model, selected, onSelect }) {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <Badge color="#34D399">{model.stage || "Production"}</Badge>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <Badge color="#34D399">{model.stage || "None"}</Badge>
             <Badge color="#4A9DFF">{model.algorithm || "Unknown"}</Badge>
           </div>
           <div style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 800 }}>{model.mlflow_model_name || "등록 전 모델"}</div>

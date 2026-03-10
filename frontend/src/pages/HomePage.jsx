@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react"
 
+import { dashboardAPI } from "../api/index"
 import ModelCardGrid from "../components/home/ModelCardGrid"
 import ModelDetailPanel from "../components/home/ModelDetailPanel"
 import StagingAlertBar from "../components/home/StagingAlertBar"
 import Spinner from "../components/ui/Spinner"
-import { dashboardAPI } from "../api/index"
 
 export default function HomePage() {
   const [loading, setLoading] = useState(true)
@@ -24,7 +24,13 @@ export default function HomePage() {
       .catch(() => {
         if (!active) return
         setModels([])
-        setStats({ production_model_count: 0, prediction_count_total: 0, alert_count: 0 })
+        setStats({
+          active_model_count: 0,
+          production_model_count: 0,
+          staging_model_count: 0,
+          prediction_count_total: 0,
+          alert_count: 0,
+        })
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -37,10 +43,10 @@ export default function HomePage() {
 
   return (
     <div style={{ height: "100%", padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
-      <StagingAlertBar count={0} />
+      <StagingAlertBar count={stats?.staging_model_count ?? 0} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-        <Stat title="운영 모델" value={stats?.production_model_count ?? 0} color="var(--accent-blue)" />
+        <Stat title="운영 가능 모델" value={stats?.active_model_count ?? 0} color="var(--accent-blue)" />
         <Stat title="전체 예측 수" value={stats?.prediction_count_total ?? 0} color="var(--success)" />
         <Stat title="알림 수" value={stats?.alert_count ?? 0} color="var(--warning)" />
       </div>
@@ -82,9 +88,13 @@ function EmptyState() {
         placeItems: "center",
         color: "var(--text-secondary)",
         padding: 24,
+        textAlign: "center",
+        lineHeight: 1.7,
       }}
     >
-      아직 Production 모델이 없습니다. 데이터 업로드와 학습 단계를 진행하면 운영 카드가 여기에 표시됩니다.
+      아직 운영 가능한 모델이 없습니다.
+      <br />
+      `finalize`와 `레지스트리 등록`을 완료하면 이 대시보드에 카드가 표시됩니다.
     </div>
   )
 }
