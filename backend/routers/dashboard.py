@@ -6,54 +6,13 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.prediction import Prediction
-from models.trained_model import TrainedModel
+from services.model_catalog_service import get_catalog_entries
 
 router = APIRouter()
 
-STAGE_PRIORITY = {
-    "Production": 0,
-    "Staging": 1,
-    "None": 2,
-    "Archived": 3,
-    None: 4,
-}
 
-
-def _get_dashboard_models(db: Session) -> list[TrainedModel]:
-    rows = (
-        db.query(TrainedModel)
-        .filter(
-            TrainedModel.model_path.isnot(None),
-            TrainedModel.mlflow_model_name.isnot(None),
-            TrainedModel.mlflow_version.isnot(None),
-        )
-        .all()
-    )
-
-    grouped: dict[str, list[TrainedModel]] = {}
-    for row in rows:
-        grouped.setdefault(row.mlflow_model_name, []).append(row)
-
-    selected = []
-    for name, versions in grouped.items():
-        preferred = sorted(
-            versions,
-            key=lambda model: (
-                STAGE_PRIORITY.get(model.stage, 99),
-                -(model.mlflow_version or 0),
-                -model.id,
-            ),
-        )[0]
-        selected.append(preferred)
-
-    return sorted(
-        selected,
-        key=lambda model: (
-            -model.id,
-            STAGE_PRIORITY.get(model.stage, 99),
-            -(model.mlflow_version or 0),
-        ),
-    )
+def _get_dashboard_models(db: Session) -> list:
+    return [entry["model"] for entry in get_catalog_entries(db)]
 
 
 @router.get("/models")

@@ -13,17 +13,10 @@ from models.dataset import Dataset
 from models.experiment import Experiment
 from models.prediction import Prediction
 from models.trained_model import TrainedModel
+from services.model_catalog_service import STAGE_PRIORITY, get_catalog_entries
 from services.pycaret_service import predict_batch_rows, predict_payload
 
 router = APIRouter()
-
-STAGE_PRIORITY = {
-    "Production": 0,
-    "Staging": 1,
-    "None": 2,
-    "Archived": 3,
-    None: 4,
-}
 
 
 class SinglePredictRequest(BaseModel):
@@ -36,13 +29,10 @@ def _sanitize_label(value: str) -> str:
 
 
 def _get_predictable_versions(db: Session, model_name: str | None = None) -> list[TrainedModel]:
-    query = (
-        db.query(TrainedModel)
-        .filter(TrainedModel.model_path.isnot(None), TrainedModel.mlflow_model_name.isnot(None))
-    )
+    models = [entry["model"] for entry in get_catalog_entries(db)]
     if model_name:
-        query = query.filter(TrainedModel.mlflow_model_name == model_name)
-    return query.all()
+        models = [model for model in models if model.mlflow_model_name == model_name]
+    return models
 
 
 def _pick_preferred_model(models: list[TrainedModel]) -> TrainedModel | None:

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.trained_model import TrainedModel
+from services.model_catalog_service import get_catalog_entries
 from services.mlflow_service import get_all_registered_models
 
 router = APIRouter()
@@ -30,17 +31,9 @@ def list_registered_models(db: Session = Depends(get_db)):
     if models:
         return models
 
-    grouped = (
-        db.query(TrainedModel.mlflow_model_name)
-        .filter(
-            TrainedModel.mlflow_model_name.isnot(None),
-            TrainedModel.mlflow_version.isnot(None),
-        )
-        .distinct()
-        .all()
-    )
     results = []
-    for (name,) in grouped:
+    for entry in get_catalog_entries(db):
+        name = entry["model"].mlflow_model_name
         versions = (
             db.query(TrainedModel)
             .filter(
