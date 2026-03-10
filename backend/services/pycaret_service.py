@@ -1,4 +1,5 @@
 import base64
+import json
 from pathlib import Path
 
 import matplotlib
@@ -43,10 +44,40 @@ METRIC_LABELS = {
 }
 
 EXPERIMENT_CONTEXTS: dict[int, dict] = {}
+MODEL_CATALOG_CACHE: dict[str, list[str]] = {}
+MODEL_CONTEXT_KEYS = {
+    "trained": "trained_models",
+    "tuned": "tuned_models",
+    "final": "final_models",
+}
 
 
 def _sanitize_column_name(name: str) -> str:
     return " ".join(str(name).replace("\t", " ").replace("\n", " ").split()) or "column"
+
+
+def _slugify_algorithm(name: str) -> str:
+    return _sanitize_column_name(name).lower().replace(" ", "_")
+
+
+def _experiment_dir(experiment_id: int) -> Path:
+    path = Path(settings.experiment_dir) / f"experiment_{experiment_id}"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _experiment_pickle_path(experiment_id: int) -> Path:
+    return _experiment_dir(experiment_id) / "pycaret_experiment.pkl"
+
+
+def _context_metadata_path(experiment_id: int) -> Path:
+    return _experiment_dir(experiment_id) / "context.json"
+
+
+def _cached_model_path(experiment_id: int, bucket: str, algorithm: str) -> Path:
+    bucket_dir = _experiment_dir(experiment_id) / bucket
+    bucket_dir.mkdir(parents=True, exist_ok=True)
+    return bucket_dir / _slugify_algorithm(algorithm)
 
 
 def _normalize_dataframe_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, str]]:
@@ -67,6 +98,58 @@ def _normalize_dataframe_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[s
     return normalized_df, mapping
 
 
+def _load_context_metadata(experiment_id: int) -> dict:
+    metadata_path = _context_metadata_path(experiment_id)
+    if not metadata_path.exists():
+        return {}
+    return json.loads(metadata_path.read_text(encoding="utf-8"))
+
+
+def _persist_context_metadata(context: dict) -> None:
+    experiment_id = context["experiment_id"]
+    payload = {
+        "dataset_path": context.get("dataset_path"),
+        "module_type": context.get("module_type"),
+        "params": context.get("params"),
+        "experiment_name": context.get("experiment_name"),
+        "mlflow_experiment_id": context.get("mlflow_experiment_id"),
+        "run_ids": context.get("run_ids", {}),
+        "persisted_models": context.get("persisted_models", {}),
+    }
+    _context_metadata_path(experiment_id).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _save_experiment_snapshot(context: dict) -> None:
+    pc = context.get("pc")
+    if pc is None:
+        return
+    pc.save_experiment(_experiment_pickle_path(context["experiment_id"]))
+
+
+def _cache_model_artifact(context: dict, bucket: str, algorithm: str, model) -> str:
+    pc = context["pc"]
+    base_path = _cached_model_path(context["experiment_id"], bucket, algorithm)
+    pc.save_model(model, str(base_path))
+    model_path = str(base_path) + ".pkl"
+    context.setdefault("persisted_models", {}).setdefault(bucket, {})[algorithm] = model_path
+    return model_path
+
+
+def _restore_persisted_models(context: dict) -> None:
+    pc = context["pc"]
+    persisted = context.get("persisted_models", {})
+    for bucket, context_key in MODEL_CONTEXT_KEYS.items():
+        model_map = context.setdefault(context_key, {})
+        for algorithm, model_path in persisted.get(bucket, {}).items():
+            path = Path(model_path)
+            if not path.exists():
+                continue
+            model_map[algorithm] = pc.load_model(str(path.with_suffix("")))
+
+
 def _get_pycaret_module(module_type: str):
     if module_type == "classification":
         import pycaret.classification as pc
@@ -83,6 +166,56 @@ def _get_pycaret_module(module_type: str):
     return pc
 
 
+def _build_model_catalog_bootstrap(module_type: str):
+    if module_type == "classification":
+        from pycaret.classification import ClassificationExperiment
+
+        df = pd.DataFrame({"feature": [1, 2, 3, 4], "target": ["a", "b", "a", "b"]})
+        experiment = ClassificationExperiment()
+        experiment.setup(data=df, target="target", session_id=1, verbose=False, html=False, log_experiment=False)
+        return experiment
+    if module_type == "regression":
+        from pycaret.regression import RegressionExperiment
+
+        df = pd.DataFrame({"feature": [1, 2, 3, 4], "target": [1.0, 2.0, 3.0, 4.0]})
+        experiment = RegressionExperiment()
+        experiment.setup(data=df, target="target", session_id=1, verbose=False, html=False, log_experiment=False)
+        return experiment
+    if module_type == "clustering":
+        from pycaret.clustering import ClusteringExperiment
+
+        df = pd.DataFrame({"feature_a": [1, 2, 3, 4], "feature_b": [1, 1, 2, 2]})
+        experiment = ClusteringExperiment()
+        experiment.setup(data=df, session_id=1, verbose=False, html=False, log_experiment=False)
+        return experiment
+    if module_type == "anomaly":
+        from pycaret.anomaly import AnomalyExperiment
+
+        df = pd.DataFrame({"feature_a": [1, 2, 3, 4], "feature_b": [1, 1, 2, 2]})
+        experiment = AnomalyExperiment()
+        experiment.setup(data=df, session_id=1, verbose=False, html=False, log_experiment=False)
+        return experiment
+    if module_type == "timeseries":
+        from pycaret.time_series import TSForecastingExperiment
+
+        series = pd.Series([1, 2, 3, 4, 5, 6, 7, 8])
+        experiment = TSForecastingExperiment()
+        experiment.setup(data=series, fh=1, fold=2, session_id=1, verbose=False, html=False)
+        return experiment
+    raise ValueError(f"Unsupported module type: {module_type}")
+
+
+def _load_dynamic_model_catalog(module_type: str) -> list[str]:
+    if module_type in MODEL_CATALOG_CACHE:
+        return MODEL_CATALOG_CACHE[module_type]
+
+    experiment = _build_model_catalog_bootstrap(module_type)
+    models_df = experiment.models()
+    names = models_df["Name"].astype(str).tolist()
+    MODEL_CATALOG_CACHE[module_type] = names
+    return names
+
+
 def _default_sort_key(module_type: str) -> str:
     return {
         "classification": "Accuracy",
@@ -94,7 +227,10 @@ def _default_sort_key(module_type: str) -> str:
 
 
 def list_available_models(module_type: str) -> list[str]:
-    return MODULE_LIBRARY.get(module_type, MODULE_LIBRARY["classification"])
+    try:
+        return _load_dynamic_model_catalog(module_type)
+    except Exception:
+        return MODULE_LIBRARY.get(module_type, MODULE_LIBRARY["classification"])
 
 
 def _build_setup_kwargs(df: pd.DataFrame, module_type: str, params: dict, experiment_name: str) -> dict:
@@ -197,9 +333,11 @@ def ensure_experiment_context(
     params: dict,
     experiment_name: str,
 ):
+    metadata = _load_context_metadata(experiment_id)
     context = EXPERIMENT_CONTEXTS.setdefault(
         experiment_id,
         {
+            "experiment_id": experiment_id,
             "dataset_path": dataset_path,
             "module_type": module_type,
             "params": params,
@@ -208,12 +346,20 @@ def ensure_experiment_context(
             "tuned_models": {},
             "final_models": {},
             "run_ids": {},
+            "persisted_models": {"trained": {}, "tuned": {}, "final": {}},
         },
     )
+    context["experiment_id"] = experiment_id
     context["dataset_path"] = dataset_path
     context["module_type"] = module_type
     context["params"] = params
     context["experiment_name"] = experiment_name
+    context["mlflow_experiment_id"] = metadata.get("mlflow_experiment_id", context.get("mlflow_experiment_id"))
+    context["run_ids"] = metadata.get("run_ids", context.get("run_ids", {}))
+    persisted_models = metadata.get("persisted_models", {})
+    for bucket in MODEL_CONTEXT_KEYS:
+        context.setdefault("persisted_models", {}).setdefault(bucket, {})
+        context["persisted_models"][bucket].update(persisted_models.get(bucket, {}))
     return context
 
 
@@ -221,12 +367,19 @@ def _activate_experiment(experiment_id: int):
     context = EXPERIMENT_CONTEXTS.get(experiment_id)
     if not context:
         raise ValueError(f"Experiment context not found: {experiment_id}")
+    if context.get("pc") is not None:
+        return context
 
     pc = _get_pycaret_module(context["module_type"])
     df = pd.read_parquet(Path(context["dataset_path"]))
     prepared_df, prepared_params = _prepare_training_frame(df, context["params"], context)
-    setup_kwargs = _build_setup_kwargs(prepared_df, context["module_type"], prepared_params, context["experiment_name"])
-    pc.setup(**setup_kwargs)
+    experiment_pickle = _experiment_pickle_path(experiment_id)
+    if experiment_pickle.exists():
+        loaded_experiment = pc.load_experiment(experiment_pickle, data=prepared_df)
+        pc.set_current_experiment(loaded_experiment)
+    else:
+        setup_kwargs = _build_setup_kwargs(prepared_df, context["module_type"], prepared_params, context["experiment_name"])
+        pc.setup(**setup_kwargs)
     name_to_id, id_to_name = _get_model_name_maps(pc)
     context["pc"] = pc
     context["name_to_id"] = name_to_id
@@ -236,6 +389,9 @@ def _activate_experiment(experiment_id: int):
         context["input_example"] = feature_frame.head(1).copy()
     else:
         context["input_example"] = prepared_df.head(1).copy()
+    _restore_persisted_models(context)
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
     return context
 
 
@@ -257,6 +413,8 @@ def run_setup(
     pc = context["pc"]
     transformed = pc.get_config("X_train_transformed")
     context["mlflow_experiment_id"] = ensure_experiment(mlflow_experiment_name)
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
     return {
         "pipeline_steps": _extract_pipeline_steps(pc),
         "transformed_shape": list(transformed.shape),
@@ -334,6 +492,7 @@ def compare_models_real(experiment_id: int, options: dict | None = None) -> list
 
     for name, model in zip(selected_names, selected_models):
         context["trained_models"][name] = model
+        _cache_model_artifact(context, "trained", name, model)
         metric_row = results_df.loc[results_df["Model"] == name].iloc[0] if "Model" in results_df else None
         metrics = _clean_metrics(metric_row) if metric_row is not None else {}
         run_info = log_sklearn_model_run(
@@ -360,6 +519,9 @@ def compare_models_real(experiment_id: int, options: dict | None = None) -> list
         selected_run_ids[name] = run_info["run_id"]
         context["run_ids"][name] = run_info["run_id"]
         context["mlflow_experiment_id"] = run_info["experiment_id"]
+
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
 
     rows = []
     total = len(results_df)
@@ -461,6 +623,8 @@ def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | Non
 
     context["trained_models"][algorithm] = tuned_model
     context["tuned_models"][algorithm] = tuned_model
+    _cache_model_artifact(context, "trained", algorithm, tuned_model)
+    _cache_model_artifact(context, "tuned", algorithm, tuned_model)
     after_metrics = _extract_summary_metrics(after_frame)
     run_info = log_sklearn_model_run(
         experiment_name=context["experiment_name"],
@@ -485,6 +649,8 @@ def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | Non
     )
     context["run_ids"][algorithm] = run_info["run_id"]
     context["mlflow_experiment_id"] = run_info["experiment_id"]
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
 
     return {
         "algorithm": algorithm,
@@ -590,6 +756,7 @@ def finalize_model_real(experiment_id: int, algorithm: str, model_name: str, met
     save_path = Path(settings.model_dir) / model_name
     pc.save_model(final_model, str(save_path))
     context["final_models"][algorithm] = final_model
+    context.setdefault("persisted_models", {}).setdefault("final", {})[algorithm] = str(save_path) + ".pkl"
     run_info = log_sklearn_model_run(
         experiment_name=context["experiment_name"],
         run_name=f"finalize::{model_name}",
@@ -604,6 +771,8 @@ def finalize_model_real(experiment_id: int, algorithm: str, model_name: str, met
         },
         input_example=context.get("input_example"),
     )
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
     return {
         "model_path": str(save_path) + ".pkl",
         "final_metrics": metrics or {},

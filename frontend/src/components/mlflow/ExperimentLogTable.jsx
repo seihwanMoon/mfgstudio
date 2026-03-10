@@ -1,7 +1,10 @@
-function metricPreview(metrics = {}) {
-  const entries = Object.entries(metrics).slice(0, 3)
-  if (!entries.length) return "-"
-  return entries.map(([key, value]) => `${key}: ${value}`).join(" / ")
+import { formatDateTimeKST, formatMetricPreview, formatRunStatus } from "../../utils/formatters"
+
+function statusColor(status) {
+  if (status === "FINISHED") return "var(--success)"
+  if (status === "FAILED") return "var(--danger)"
+  if (status === "RUNNING") return "var(--accent-blue)"
+  return "var(--text-secondary)"
 }
 
 export default function ExperimentLogTable({
@@ -36,7 +39,9 @@ export default function ExperimentLogTable({
           <span>Run 수</span>
           <span>최근 상태</span>
         </div>
-        {!experiments.length ? <div style={{ padding: 16, color: "var(--text-secondary)" }}>실험 목록이 없습니다.</div> : null}
+        {!experiments.length ? (
+          <div style={{ padding: 16, color: "var(--text-secondary)" }}>표시할 MLflow 실험이 없습니다.</div>
+        ) : null}
         {experiments.map((row) => {
           const selected = row.experiment_id === selectedExperimentId
           return (
@@ -67,10 +72,13 @@ export default function ExperimentLogTable({
                   <div style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 4 }}>
                     최근 실행: {row.latest_run_name || "-"}
                   </div>
+                  <div style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 2 }}>
+                    최근 시각: {formatDateTimeKST(row.latest_start_time)}
+                  </div>
                 </div>
                 <span style={{ color: "var(--text-secondary)" }}>{row.run_count}</span>
-                <span style={{ color: row.latest_run_status === "FINISHED" ? "var(--success)" : "var(--text-secondary)" }}>
-                  {row.latest_run_status || "-"}
+                <span style={{ color: statusColor(row.latest_run_status) }}>
+                  {formatRunStatus(row.latest_run_status)}
                 </span>
               </div>
             </button>
@@ -103,7 +111,9 @@ export default function ExperimentLogTable({
           <span>시작 시간</span>
           <span>주요 지표</span>
         </div>
-        {!runs.length ? <div style={{ padding: 16, color: "var(--text-secondary)" }}>선택한 실험의 run 이 없습니다.</div> : null}
+        {!runs.length ? (
+          <div style={{ padding: 16, color: "var(--text-secondary)" }}>선택한 실험에 표시할 run이 없습니다.</div>
+        ) : null}
         {runs.map((row) => (
           <div
             key={row.run_id}
@@ -117,9 +127,9 @@ export default function ExperimentLogTable({
             }}
           >
             <div style={{ color: "var(--text-primary)" }}>{row.run_name}</div>
-            <div style={{ color: row.status === "FINISHED" ? "var(--success)" : "var(--text-secondary)" }}>{row.status}</div>
-            <div style={{ color: "var(--text-secondary)" }}>{row.start_time || "-"}</div>
-            <div style={{ color: "var(--text-secondary)" }}>{metricPreview(row.metrics)}</div>
+            <div style={{ color: statusColor(row.status) }}>{formatRunStatus(row.status)}</div>
+            <div style={{ color: "var(--text-secondary)" }}>{formatDateTimeKST(row.start_time)}</div>
+            <div style={{ color: "var(--text-secondary)" }}>{formatMetricPreview(row.metrics)}</div>
           </div>
         ))}
       </div>

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     mlflow_tracking_uri: str = "http://localhost:5000"
     upload_dir: str = "./data/uploads"
     model_dir: str = "./data/models"
+    experiment_dir: str = "./data/experiments"
     report_dir: str = "./data/reports"
     drift_warning_threshold: float = 0.2
     drift_danger_threshold: float = 0.4

@@ -65,7 +65,7 @@ export default function MLflowPage() {
     <div style={{ height: "100%", padding: 18, display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ border: "1px solid #1A3352", borderRadius: 14, background: "#0D1926", padding: 16 }}>
-          <div style={{ color: "#E2EEFF", fontWeight: 700, marginBottom: 8 }}>MLflow Status</div>
+          <div style={{ color: "#E2EEFF", fontWeight: 700, marginBottom: 8 }}>MLflow 상태</div>
           <div style={{ color: status?.status === "connected" ? "#34D399" : "#F87171", fontWeight: 700 }}>
             {status?.status || "unknown"}
           </div>
@@ -76,10 +76,10 @@ export default function MLflowPage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", gap: 8 }}>
           {[
-            ["logs", "Experiment Logs"],
-            ["compare", "Experiment Compare"],
-            ["registry", "Registry"],
-            ["schedule", "Schedule"],
+            ["logs", "실험 로그"],
+            ["compare", "실험 비교"],
+            ["registry", "레지스트리"],
+            ["schedule", "스케줄"],
           ].map(([key, label]) => (
             <button
               key={key}

@@ -10,6 +10,9 @@ from mlflow.tracking import MlflowClient
 
 from config import settings
 
+VISIBLE_RUN_PREFIXES = ("compare::", "tune::", "finalize::", "backfill::")
+VISIBLE_ARTIFACT_SOURCES = {"compare_models", "tune_model", "finalize_model", "backfill"}
+
 
 def _configure_tracking() -> None:
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
@@ -77,16 +80,23 @@ def _ts_to_iso(timestamp_ms: int | None) -> str | None:
     return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).isoformat()
 
 
+def _is_user_visible_run(run) -> bool:
+    run_name = run.data.tags.get("mlflow.runName") or ""
+    artifact_source = run.data.tags.get("artifact_source") or ""
+    return run_name.startswith(VISIBLE_RUN_PREFIXES) or artifact_source in VISIBLE_ARTIFACT_SOURCES
+
+
 def list_experiments() -> list[dict]:
     client = get_client()
     experiments = client.search_experiments()
     payload = []
     for experiment in experiments:
-        runs = client.search_runs(
+        raw_runs = client.search_runs(
             experiment_ids=[experiment.experiment_id],
-            max_results=20,
+            max_results=100,
             order_by=["attribute.start_time DESC"],
         )
+        runs = [run for run in raw_runs if _is_user_visible_run(run)]
         latest_run = runs[0] if runs else None
         payload.append(
             {
@@ -99,6 +109,11 @@ def list_experiments() -> list[dict]:
                 "latest_run_name": latest_run.data.tags.get("mlflow.runName") if latest_run else None,
                 "latest_run_status": latest_run.info.status if latest_run else None,
                 "latest_start_time": _ts_to_iso(latest_run.info.start_time) if latest_run else None,
+                "latest_metrics": (
+                    {key: round(float(value), 4) for key, value in latest_run.data.metrics.items()}
+                    if latest_run
+                    else {}
+                ),
             }
         )
     return sorted(payload, key=lambda item: ((item["latest_start_time"] or ""), item["name"]), reverse=True)
@@ -106,11 +121,12 @@ def list_experiments() -> list[dict]:
 
 def list_experiment_runs(experiment_id: str, max_results: int = 20) -> list[dict]:
     client = get_client()
-    runs = client.search_runs(
+    raw_runs = client.search_runs(
         experiment_ids=[experiment_id],
-        max_results=max_results,
+        max_results=max_results * 5,
         order_by=["attribute.start_time DESC"],
     )
+    runs = [run for run in raw_runs if _is_user_visible_run(run)][:max_results]
     payload = []
     for run in runs:
         metrics = {key: round(float(value), 4) for key, value in run.data.metrics.items()}

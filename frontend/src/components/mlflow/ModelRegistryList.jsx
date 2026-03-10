@@ -16,8 +16,12 @@ export default function ModelRegistryList({ rows = [] }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {!rows.length ? <div style={{ color: "var(--text-secondary)" }}>등록된 모델이 없습니다.</div> : null}
         {rows.map((row) => (
-          <div key={row.name} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, color: "var(--text-secondary)" }}>
+          <div
+            key={row.name}
+            style={{ borderTop: "1px solid var(--border)", paddingTop: 8, color: "var(--text-secondary)" }}
+          >
             {row.name} · latest {row.latest_versions?.[0] ?? row.latest_version ?? "-"}
+            {row.production_version ? ` · Production ${row.production_version}` : ""}
           </div>
         ))}
       </div>

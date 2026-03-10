@@ -248,6 +248,9 @@ All planned tasks are currently complete.
 | 2026-03-10 | Real MLflow synchronization added for finalize/register/stage flows, `manufacturing_model` versions 1-3 were backfilled into the actual MLflow Registry, and `manufacturing_model v3` was promoted to `Production` in both app state and MLflow | Codex |
 | 2026-03-10 | Added `NEXT_DEVELOPMENT_PLAN.md`, connected compare top-N selections and tune results to real MLflow runs, and confirmed `compare::...` / `tune::...` runs appear in the actual MLflow experiment history | Codex |
 | 2026-03-10 | Fixed compare rerun so candidate rows no longer delete finalized/registered versions, restored `manufacturing_model v3`, and verified candidate rows and production registry rows can coexist for the same experiment | Codex |
+| 2026-03-10 | Refined the in-app MLflow ops view by filtering PyCaret internal runs from experiment logs, converting visible timestamps to KST in the frontend, enriching experiment compare with latest metric tables, and localizing the schedule/registry panels | Codex |
+| 2026-03-10 | Implemented PyCaret experiment persistence with `save_experiment()` / `load_experiment()`, cached compare/tuned model artifacts under `data/experiments/`, persisted context metadata to disk, and verified analyze/XAI still works after clearing in-memory contexts | Codex |
+| 2026-03-10 | Replaced the fixed model list API with PyCaret bootstrap experiments so `GET /api/train/models` now reflects the actual installed estimator catalog for classification, regression, clustering, anomaly, and time series modules | Codex |
 
 ---
 
