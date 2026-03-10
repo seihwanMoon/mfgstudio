@@ -1,5 +1,4 @@
 import base64
-import uuid
 from pathlib import Path
 
 import matplotlib
@@ -295,6 +294,14 @@ def _to_jsonable(value):
     return value
 
 
+def _build_mlflow_params(base_params: dict | None, extra_params: dict | None = None) -> dict:
+    payload = {}
+    for source in (base_params or {}, extra_params or {}):
+        for key, value in source.items():
+            payload[key] = _to_jsonable(value)
+    return payload
+
+
 def compare_models_real(experiment_id: int, options: dict | None = None) -> list[dict]:
     options = options or {}
     context = _activate_experiment(experiment_id)
@@ -323,16 +330,42 @@ def compare_models_real(experiment_id: int, options: dict | None = None) -> list
     results_df = pc.pull().copy()
     selected_models = compared if isinstance(compared, list) else [compared]
     selected_names = results_df["Model"].head(len(selected_models)).tolist() if "Model" in results_df else []
+    selected_run_ids = {}
 
     for name, model in zip(selected_names, selected_models):
         context["trained_models"][name] = model
+        metric_row = results_df.loc[results_df["Model"] == name].iloc[0] if "Model" in results_df else None
+        metrics = _clean_metrics(metric_row) if metric_row is not None else {}
+        run_info = log_sklearn_model_run(
+            experiment_name=context["experiment_name"],
+            run_name=f"compare::{name}",
+            model=model,
+            metrics=metrics,
+            params=_build_mlflow_params(
+                context.get("params"),
+                {
+                    "compare_sort": compare_kwargs.get("sort"),
+                    "compare_n_select": compare_kwargs.get("n_select"),
+                    "compare_budget_time": compare_kwargs.get("budget_time"),
+                },
+            ),
+            tags={
+                "module_type": context["module_type"],
+                "algorithm": name,
+                "artifact_source": "compare_models",
+                "selection_rank": selected_names.index(name) + 1,
+            },
+            input_example=context.get("input_example"),
+        )
+        selected_run_ids[name] = run_info["run_id"]
+        context["run_ids"][name] = run_info["run_id"]
+        context["mlflow_experiment_id"] = run_info["experiment_id"]
 
     rows = []
     total = len(results_df)
     for rank, (_, row) in enumerate(results_df.iterrows(), start=1):
         algorithm = str(row.get("Model", rank))
-        run_id = f"run_{experiment_id}_{rank}_{uuid.uuid4().hex[:8]}"
-        context["run_ids"][algorithm] = run_id
+        run_id = selected_run_ids.get(algorithm)
         rows.append(
             {
                 "rank": rank,
@@ -340,6 +373,7 @@ def compare_models_real(experiment_id: int, options: dict | None = None) -> list
                 "metrics": _clean_metrics(row),
                 "tt_sec": round(float(row.get("TT (Sec)", 0) or 0), 2),
                 "mlflow_run_id": run_id,
+                "is_logged": run_id is not None,
                 "total_done": rank,
                 "total_models": total,
             }
@@ -427,13 +461,39 @@ def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | Non
 
     context["trained_models"][algorithm] = tuned_model
     context["tuned_models"][algorithm] = tuned_model
+    after_metrics = _extract_summary_metrics(after_frame)
+    run_info = log_sklearn_model_run(
+        experiment_name=context["experiment_name"],
+        run_name=f"tune::{algorithm}",
+        model=tuned_model,
+        metrics=after_metrics,
+        params=_build_mlflow_params(
+            context.get("params"),
+            {
+                "tune_optimize": tune_kwargs.get("optimize"),
+                "tune_n_iter": tune_kwargs.get("n_iter"),
+                "tune_search_library": tune_kwargs.get("search_library"),
+                "tune_choose_better": tune_kwargs.get("choose_better"),
+            },
+        ),
+        tags={
+            "module_type": context["module_type"],
+            "algorithm": algorithm,
+            "artifact_source": "tune_model",
+        },
+        input_example=context.get("input_example"),
+    )
+    context["run_ids"][algorithm] = run_info["run_id"]
+    context["mlflow_experiment_id"] = run_info["experiment_id"]
 
     return {
         "algorithm": algorithm,
         "before_metrics": _extract_summary_metrics(before_frame),
-        "after_metrics": _extract_summary_metrics(after_frame),
+        "after_metrics": after_metrics,
         "changed_params": _diff_params(base_model.get_params(), tuned_model.get_params()),
         "trials": _extract_trials(tuner),
+        "run_id": run_info["run_id"],
+        "mlflow_experiment_id": run_info["experiment_id"],
     }
 
 

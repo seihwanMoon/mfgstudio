@@ -246,6 +246,8 @@ All planned tasks are currently complete.
 | 2026-03-10 | Prediction flow changed to finalized-model-only selection, dynamic schema-based single prediction forms, registry/predict/home catalog filtering, and user-facing demo/test models hidden from dashboard, predict, and app MLflow pages | Codex |
 | 2026-03-10 | App-side MLflow registry list filtered to versioned models only; actual MLflow server integration identified as the next architectural gap because the app UI and real MLflow UI are still only partially synchronized | Codex |
 | 2026-03-10 | Real MLflow synchronization added for finalize/register/stage flows, `manufacturing_model` versions 1-3 were backfilled into the actual MLflow Registry, and `manufacturing_model v3` was promoted to `Production` in both app state and MLflow | Codex |
+| 2026-03-10 | Added `NEXT_DEVELOPMENT_PLAN.md`, connected compare top-N selections and tune results to real MLflow runs, and confirmed `compare::...` / `tune::...` runs appear in the actual MLflow experiment history | Codex |
+| 2026-03-10 | Fixed compare rerun so candidate rows no longer delete finalized/registered versions, restored `manufacturing_model v3`, and verified candidate rows and production registry rows can coexist for the same experiment | Codex |
 
 ---
 

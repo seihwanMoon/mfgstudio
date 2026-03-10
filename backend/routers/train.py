@@ -159,7 +159,11 @@ async def compare_stream(experiment_id: int, db: Session = Depends(get_db)):
         db.commit()
         raise HTTPException(status_code=500, detail=f"compare failed: {exc}") from exc
 
-    db.query(TrainedModel).filter(TrainedModel.experiment_id == experiment_id).delete()
+    db.query(TrainedModel).filter(
+        TrainedModel.experiment_id == experiment_id,
+        TrainedModel.model_path.is_(None),
+        TrainedModel.mlflow_version.is_(None),
+    ).delete()
     for row in results:
         db.add(
             TrainedModel(
@@ -190,7 +194,16 @@ async def compare_stream(experiment_id: int, db: Session = Depends(get_db)):
 
 @router.get("/compare/{experiment_id}/result")
 def get_compare_result(experiment_id: int, db: Session = Depends(get_db)):
-    models = db.query(TrainedModel).filter(TrainedModel.experiment_id == experiment_id).all()
+    models = (
+        db.query(TrainedModel)
+        .filter(
+            TrainedModel.experiment_id == experiment_id,
+            TrainedModel.model_path.is_(None),
+            TrainedModel.mlflow_version.is_(None),
+        )
+        .order_by(TrainedModel.id.asc())
+        .all()
+    )
     return [
         {
             "id": model.id,
@@ -258,13 +271,22 @@ async def tune_stream(job_id: str, db: Session = Depends(get_db)):
 
     model = (
         db.query(TrainedModel)
-        .filter(TrainedModel.experiment_id == experiment_id, TrainedModel.algorithm == algorithm)
+        .filter(
+            TrainedModel.experiment_id == experiment_id,
+            TrainedModel.algorithm == algorithm,
+            TrainedModel.model_path.is_(None),
+            TrainedModel.mlflow_version.is_(None),
+        )
+        .order_by(TrainedModel.id.desc())
         .first()
     )
     if model:
         model.is_tuned = True
         model.hyperparams = json.dumps(summary["changed_params"], ensure_ascii=False)
         model.metrics = json.dumps(summary["after_metrics"], ensure_ascii=False)
+        model.mlflow_run_id = summary.get("run_id")
+    if summary.get("mlflow_experiment_id") is not None:
+        experiment.mlflow_exp_id = str(summary["mlflow_experiment_id"])
     experiment.status = "done"
     db.commit()
 

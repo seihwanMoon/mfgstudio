@@ -97,6 +97,7 @@
 |------|------|
 | [PROGRESS.md](D:/GITHUB/mfgstudio/PROGRESS.md) | 전체 태스크 완료 현황과 작업 로그 |
 | [HANDOFF.md](D:/GITHUB/mfgstudio/HANDOFF.md) | 다음 세션 인수인계 |
+| [NEXT_DEVELOPMENT_PLAN.md](D:/GITHUB/mfgstudio/NEXT_DEVELOPMENT_PLAN.md) | 추가 개발 우선순위와 다음 단계 계획 |
 | [ARCHITECTURE.md](D:/GITHUB/mfgstudio/ARCHITECTURE.md) | 아키텍처 / API / 데이터 구조 |
 | [SETUP.md](D:/GITHUB/mfgstudio/SETUP.md) | 설치 및 실행 |
 | [SCREENS.md](D:/GITHUB/mfgstudio/SCREENS.md) | 화면 설계 기준 |

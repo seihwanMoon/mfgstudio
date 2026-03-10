@@ -167,7 +167,11 @@ def log_sklearn_model_run(
 ) -> dict:
     _configure_tracking()
     experiment_id = ensure_experiment(experiment_name)
-    with mlflow.start_run(experiment_id=experiment_id, run_name=run_name) as run:
+    with mlflow.start_run(
+        experiment_id=experiment_id,
+        run_name=run_name,
+        nested=mlflow.active_run() is not None,
+    ) as run:
         if tags:
             mlflow.set_tags({key: str(value) for key, value in tags.items() if value is not None})
         payload_params = _jsonable_params(params)
