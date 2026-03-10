@@ -371,7 +371,15 @@ def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | Non
     if tune_options.get("early_stopping") is not None:
         tune_kwargs["early_stopping"] = bool(tune_options.get("early_stopping"))
 
-    tuned_model, tuner = pc.tune_model(**tune_kwargs)
+    try:
+        tuned_model, tuner = pc.tune_model(**tune_kwargs)
+    except Exception as exc:
+        message = str(exc)
+        if tune_kwargs.get("search_library") != "scikit-learn" and "soft dependency" in message and "optuna" in message:
+            tune_kwargs["search_library"] = "scikit-learn"
+            tuned_model, tuner = pc.tune_model(**tune_kwargs)
+        else:
+            raise
     after_frame = pc.pull().copy()
 
     context["trained_models"][algorithm] = tuned_model

@@ -44,7 +44,26 @@ export default function LeaderboardTable({ results = [] }) {
             }}
           >
             <input type="checkbox" checked={selected} onChange={() => toggleSelectModel(row.algorithm)} />
-            <div style={{ color: index === 0 ? "var(--warning)" : "var(--text-primary)", fontWeight: 700 }}>{row.algorithm}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: index === 0 ? "var(--warning)" : "var(--text-primary)", fontWeight: 700 }}>
+              <span>{row.algorithm}</span>
+              {index === 0 ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background: "rgba(217, 154, 17, 0.14)",
+                    border: "1px solid rgba(217, 154, 17, 0.3)",
+                    color: "var(--warning)",
+                    fontSize: 10,
+                    fontWeight: 800,
+                  }}
+                >
+                  최고 추천
+                </span>
+              ) : null}
+            </div>
             {metricKeys.map((metric) => (
               <Metric key={metric} value={row.metrics?.[metric]} />
             ))}
