@@ -22,6 +22,8 @@ export const trainAPI = {
 
 export const mlflowAPI = {
   status: () => api.get("/api/mlflow/status"),
+  experiments: () => api.get("/api/mlflow/experiments"),
+  runs: (experimentId, limit = 20) => api.get(`/api/mlflow/experiments/${experimentId}/runs?limit=${limit}`),
 }
 
 export const dashboardAPI = {

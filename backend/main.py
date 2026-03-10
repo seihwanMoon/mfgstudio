@@ -1,14 +1,13 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import mlflow
+import mlflow as mlflow_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from database import init_db
-from routers import analyze, dashboard, data, drift, predict, registry, report, schedule, train
-from services.mlflow_service import get_mlflow_status
+from routers import analyze, dashboard, data, drift, mlflow as mlflow_router, predict, registry, report, schedule, train
 from services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -21,7 +20,7 @@ def ensure_runtime_dirs() -> None:
 async def lifespan(app: FastAPI):
     ensure_runtime_dirs()
     init_db()
-    mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+    mlflow_sdk.set_tracking_uri(settings.mlflow_tracking_uri)
     start_scheduler()
     yield
     stop_scheduler()
@@ -43,6 +42,7 @@ app.add_middleware(
 )
 
 app.include_router(data.router, prefix="/api/data", tags=["data"])
+app.include_router(mlflow_router.router, prefix="/api/mlflow", tags=["mlflow"])
 app.include_router(train.router, prefix="/api/train", tags=["train"])
 app.include_router(analyze.router, prefix="/api/analyze", tags=["analyze"])
 app.include_router(predict.router, prefix="/api/predict", tags=["predict"])
@@ -56,8 +56,3 @@ app.include_router(report.router, prefix="/api/report", tags=["report"])
 @app.get("/health")
 def health_check():
     return {"status": "ok", "mlflow": settings.mlflow_tracking_uri}
-
-
-@app.get("/api/mlflow/status")
-def mlflow_status():
-    return get_mlflow_status()

@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import mlflow
@@ -68,6 +69,64 @@ def get_all_registered_models() -> list[dict]:
         return sorted(models, key=lambda item: (-(item["latest_versions"][0] or 0), item["name"]))
     except Exception:
         return []
+
+
+def _ts_to_iso(timestamp_ms: int | None) -> str | None:
+    if not timestamp_ms:
+        return None
+    return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).isoformat()
+
+
+def list_experiments() -> list[dict]:
+    client = get_client()
+    experiments = client.search_experiments()
+    payload = []
+    for experiment in experiments:
+        runs = client.search_runs(
+            experiment_ids=[experiment.experiment_id],
+            max_results=20,
+            order_by=["attribute.start_time DESC"],
+        )
+        latest_run = runs[0] if runs else None
+        payload.append(
+            {
+                "experiment_id": experiment.experiment_id,
+                "name": experiment.name,
+                "lifecycle_stage": experiment.lifecycle_stage,
+                "run_count": len(runs),
+                "last_update_time": _ts_to_iso(getattr(experiment, "last_update_time", None)),
+                "latest_run_id": latest_run.info.run_id if latest_run else None,
+                "latest_run_name": latest_run.data.tags.get("mlflow.runName") if latest_run else None,
+                "latest_run_status": latest_run.info.status if latest_run else None,
+                "latest_start_time": _ts_to_iso(latest_run.info.start_time) if latest_run else None,
+            }
+        )
+    return sorted(payload, key=lambda item: ((item["latest_start_time"] or ""), item["name"]), reverse=True)
+
+
+def list_experiment_runs(experiment_id: str, max_results: int = 20) -> list[dict]:
+    client = get_client()
+    runs = client.search_runs(
+        experiment_ids=[experiment_id],
+        max_results=max_results,
+        order_by=["attribute.start_time DESC"],
+    )
+    payload = []
+    for run in runs:
+        metrics = {key: round(float(value), 4) for key, value in run.data.metrics.items()}
+        payload.append(
+            {
+                "run_id": run.info.run_id,
+                "run_name": run.data.tags.get("mlflow.runName") or run.info.run_id[:8],
+                "status": run.info.status,
+                "start_time": _ts_to_iso(run.info.start_time),
+                "end_time": _ts_to_iso(run.info.end_time),
+                "metrics": metrics,
+                "params": dict(run.data.params),
+                "tags": dict(run.data.tags),
+            }
+        )
+    return payload
 
 
 def _jsonable_params(params: dict[str, Any] | None) -> dict[str, Any]:

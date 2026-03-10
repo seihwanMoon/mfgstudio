@@ -9,14 +9,38 @@ import ScheduleManager from "../components/mlflow/ScheduleManager"
 export default function MLflowPage() {
   const [status, setStatus] = useState(null)
   const [models, setModels] = useState([])
+  const [experiments, setExperiments] = useState([])
+  const [selectedExperimentId, setSelectedExperimentId] = useState(null)
+  const [runs, setRuns] = useState([])
   const [jobs, setJobs] = useState([])
   const [tab, setTab] = useState("logs")
 
   useEffect(() => {
     mlflowAPI.status().then(setStatus).catch(() => setStatus({ status: "disconnected" }))
     registryAPI.listModels().then(setModels).catch(() => setModels([]))
+    mlflowAPI
+      .experiments()
+      .then((response) => {
+        const rows = response.experiments || []
+        setExperiments(rows)
+        if (rows.length) {
+          setSelectedExperimentId(rows[0].experiment_id)
+        }
+      })
+      .catch(() => {
+        setExperiments([])
+        setSelectedExperimentId(null)
+      })
     scheduleAPI.jobs().then((response) => setJobs(response.jobs || [])).catch(() => setJobs([]))
   }, [])
+
+  useEffect(() => {
+    if (!selectedExperimentId) {
+      setRuns([])
+      return
+    }
+    mlflowAPI.runs(selectedExperimentId).then((response) => setRuns(response.runs || [])).catch(() => setRuns([]))
+  }, [selectedExperimentId])
 
   async function refreshJobs() {
     const response = await scheduleAPI.jobs()
@@ -73,8 +97,15 @@ export default function MLflowPage() {
             </button>
           ))}
         </div>
-        {tab === "logs" ? <ExperimentLogTable rows={models} /> : null}
-        {tab === "compare" ? <ExperimentCompareView rows={models} /> : null}
+        {tab === "logs" ? (
+          <ExperimentLogTable
+            experiments={experiments}
+            selectedExperimentId={selectedExperimentId}
+            onSelectExperiment={setSelectedExperimentId}
+            runs={runs}
+          />
+        ) : null}
+        {tab === "compare" ? <ExperimentCompareView experiments={experiments} /> : null}
         {tab === "registry" ? <ModelRegistryList rows={models} /> : null}
         {tab === "schedule" ? (
           <ScheduleManager jobs={jobs} onToggle={handleToggle} onRunNow={handleRunNow} />
