@@ -148,14 +148,19 @@ Current result:
 
 ## Execution order for the next session
 
-1. Continue Analyze / XAI enhancement
-2. Polish advanced PyCaret candidate UX in Tune / Finalize
-3. Surface classification optimization metadata more clearly
+1. Fix the time-series compare blocker introduced after time-series setup support landed
+2. Re-verify the full time-series workflow end-to-end
+3. Continue Analyze / XAI enhancement
+4. Polish advanced PyCaret candidate UX in Tune / Finalize
+5. Surface classification optimization metadata more clearly
 
 ## Notes
 
 - user-facing app catalog should continue to center on `manufacturing_model`
 - browser `chrome-extension://... postMessage` errors are still treated as extension noise, not app errors
+- time-series support is partially complete:
+  - `setup()` works with automatic datetime-index detection
+  - `compare` for experiment `53` is still failing and is the next required fix
 - before starting new work, re-check:
   - `git status --short`
   - `npm run build`

@@ -258,6 +258,11 @@ All planned tasks are currently complete.
 | 2026-03-12 | Fixed analyze plot fallback for estimators without native feature importance, stabilized backend runtime by removing dev auto-reload in Docker, repaired multiple mojibake frontend screens, and stopped registry version lookups from firing on partial input values | Codex |
 | 2026-03-12 | Added classification-specific PyCaret optimizations with `calibrate_model()` and binary-only `optimize_threshold()`, exposed them in the Tune screen, and verified both the multiclass guard (`400`) and binary threshold optimization success through live API smoke tests | Codex |
 | 2026-03-12 | Added backend-generated `SHAP dependence` XAI plots, localized remaining Compare/Finalize/Analyze strings, surfaced candidate metadata (`operation`, `members`, `resolved_model_name`) in compare/finalize cards, and re-verified `POST /api/analyze/plot` for `plot_family=xai`, `plot_type=dependence` with a live `200` image response | Codex |
+| 2026-03-12 | Added sample CSV datasets for classification, regression, clustering, anomaly, and time series testing under `data/samples/`, then validated module-specific setup flows against those files | Codex |
+| 2026-03-12 | Fixed anomaly-module gaps by replacing unsupported `compare_models()` and `finalize_model()` calls with anomaly-compatible flows, disabled unsupported anomaly/clustering `tune_model()` in the UI, and stabilized anomaly analysis so `t-SNE` works while SHAP stays explicitly unavailable | Codex |
+| 2026-03-12 | Fixed clustering compare by replacing unsupported `compare_models()` with sequential `create_model()` evaluation, repaired clustering analysis plots so `cluster`, `t-SNE`, and `elbow` all return PNG images, and cleared stale compare selections that blocked row selection in the UI | Codex |
+| 2026-03-12 | Repaired prediction path recovery for finalized models, stabilized classification permutation importance, and restored several mojibake Analyze/Setup strings while keeping browser-extension `postMessage` errors documented as non-app noise | Codex |
+| 2026-03-12 | Added time-series-specific setup handling by stripping unsupported tabular `setup()` parameters, auto-detecting datetime index columns, and returning `y_train`-based setup shape so the sample time-series setup path now succeeds with `TransformedTargetForecaster` | Codex |
 
 ---
 
@@ -286,3 +291,13 @@ Resolution: PDF output was still generated successfully. Keep as a non-blocking 
 Symptom: The in-app MLflow management screen showed versioned models, but the real MLflow UI at `http://localhost:5000` remained empty.
 Cause: The app had local DB-based registry/state handling, while real MLflow run logging and registry registration were not yet wired into the finalize/register flow.
 Resolution: Resolved. Finalize now logs real MLflow runs, register/stage flows sync with real MLflow Registry, and a backfill script seeded the visible `manufacturing_model` versions into MLflow.
+
+### [2026-03-12] Time-series compare path still unstable
+Symptom: `GET /api/train/compare/53/stream` still fails from the browser after time-series `setup()` succeeds, and experiment `53` is recorded as `compare_error`.
+Observed state:
+- `POST /api/train/setup` for the sample time-series dataset now succeeds
+- experiment `53` uses module type `timeseries`
+- `GET /api/train/compare/53/result` currently returns `[]`
+- backend logs show `GET /api/train/compare/53/stream HTTP/1.1" 500 Internal Server Error`
+Likely cause: the compare stream still assumes tabular-style MLflow/model handling for time-series estimators and needs a time-series-specific compare implementation or guard.
+Next step: reproduce the exact exception from `compare_models_real()` for `module_type='timeseries'`, then either implement a proper time-series compare path or restrict unsupported options with a clear `400` response.
