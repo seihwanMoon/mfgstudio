@@ -3,11 +3,12 @@ import { useMemo } from "react"
 import useStore from "../store/useStore"
 
 export function useSSECompare() {
-  const { addCompareResult, clearCompareResults } = useStore()
+  const { addCompareResult, clearCompareResults, clearSelectedModelsForTune } = useStore()
 
   return useMemo(
     () => ({
       startCompare(experimentId, onDone, onError) {
+        clearSelectedModelsForTune()
         clearCompareResults()
         const source = new EventSource(
           `${import.meta.env.VITE_API_BASE_URL || "http://localhost:8000"}/api/train/compare/${experimentId}/stream`
@@ -28,6 +29,6 @@ export function useSSECompare() {
         return () => source.close()
       },
     }),
-    [addCompareResult, clearCompareResults]
+    [addCompareResult, clearCompareResults, clearSelectedModelsForTune]
   )
 }

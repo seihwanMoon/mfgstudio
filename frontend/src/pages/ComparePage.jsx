@@ -29,6 +29,7 @@ export default function ComparePage() {
     compareOptions,
     compareResults,
     setCompareOption,
+    setSelectedModelsForTune,
     setupParams,
     selectedModelsForTune,
   } = useStore()
@@ -72,6 +73,27 @@ export default function ComparePage() {
       setCompareOption("family", "all")
     }
   }, [compareOptions.family, familyOptions, setCompareOption])
+
+  useEffect(() => {
+    if (!compareResults.length) {
+      if (selectedModelsForTune.length) {
+        setSelectedModelsForTune([])
+      }
+      return
+    }
+
+    const validAlgorithms = new Set(compareResults.map((row) => row.algorithm))
+    const reconciled = selectedModelsForTune.filter((algorithm) => validAlgorithms.has(algorithm))
+
+    if (reconciled.length !== selectedModelsForTune.length) {
+      setSelectedModelsForTune(reconciled)
+      return
+    }
+
+    if (!reconciled.length) {
+      setSelectedModelsForTune(compareResults.slice(0, Math.min(3, compareResults.length)).map((row) => row.algorithm))
+    }
+  }, [compareResults, selectedModelsForTune, setSelectedModelsForTune])
 
   async function handleStart() {
     if (!currentExperimentId) {

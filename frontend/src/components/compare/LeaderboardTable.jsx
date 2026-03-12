@@ -33,17 +33,29 @@ export default function LeaderboardTable({ results = [] }) {
         return (
           <div
             key={row.algorithm}
+            onClick={() => toggleSelectModel(row.algorithm)}
             style={{
               display: "grid",
               gridTemplateColumns,
               gap: 10,
               padding: "12px 14px",
               borderTop: "1px solid var(--border)",
-              background: index === 0 ? "rgba(217, 154, 17, 0.08)" : "var(--bg-surface)",
+              background: selected
+                ? "rgba(56, 189, 248, 0.12)"
+                : index === 0
+                  ? "rgba(217, 154, 17, 0.08)"
+                  : "var(--bg-surface)",
               alignItems: "center",
+              cursor: "pointer",
             }}
           >
-            <input type="checkbox" checked={selected} onChange={() => toggleSelectModel(row.algorithm)} />
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => toggleSelectModel(row.algorithm)}
+              onClick={(event) => event.stopPropagation()}
+              style={{ width: 18, height: 18, cursor: "pointer" }}
+            />
             <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", color: index === 0 ? "var(--warning)" : "var(--text-primary)", fontWeight: 700 }}>
                 <span>{row.algorithm}</span>

@@ -98,6 +98,8 @@ const useStore = create((set) => ({
     })),
   clearTuneTrials: () => set({ tuneTrials: [] }),
   setTuneResult: (tuneResult) => set({ tuneResult }),
+  setSelectedModelsForTune: (selectedModelsForTune) => set({ selectedModelsForTune: selectedModelsForTune.slice(0, 3) }),
+  clearSelectedModelsForTune: () => set({ selectedModelsForTune: [] }),
   toggleSelectModel: (algorithm) =>
     set((state) => ({
       selectedModelsForTune: state.selectedModelsForTune.includes(algorithm)
