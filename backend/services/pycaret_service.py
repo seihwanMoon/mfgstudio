@@ -12,6 +12,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import shap
+from sklearn.decomposition import PCA
 from sklearn.inspection import permutation_importance
 from sklearn.manifold import TSNE
 from sklearn.metrics import accuracy_score
@@ -1255,6 +1256,12 @@ def _has_umap() -> bool:
     return importlib.util.find_spec("umap") is not None
 
 
+def _resolve_tsne_perplexity(n_samples: int) -> int:
+    if n_samples < 2:
+        raise ValueError("t-SNE plot requires at least 2 samples.")
+    return max(1, min(30, max(1, (n_samples - 1) // 3), n_samples - 1))
+
+
 def _build_anomaly_embedding_plot(context: dict, model, plot_type: str) -> str:
     pc = context["pc"]
     features = pc.get_config("X_train_transformed")
@@ -1262,9 +1269,7 @@ def _build_anomaly_embedding_plot(context: dict, model, plot_type: str) -> str:
         raise ValueError("No anomaly data is available for visualization.")
 
     if plot_type == "tsne":
-        if len(features) < 2:
-            raise ValueError("t-SNE plot requires at least 2 samples.")
-        perplexity = max(1, min(30, len(features) - 1))
+        perplexity = _resolve_tsne_perplexity(len(features))
         reducer = TSNE(n_components=2, perplexity=perplexity, init="random", learning_rate="auto", random_state=42)
     elif plot_type == "umap":
         if not _has_umap():
@@ -1299,6 +1304,56 @@ def _build_anomaly_embedding_plot(context: dict, model, plot_type: str) -> str:
     return _figure_to_base64()
 
 
+def _build_clustering_plot(context: dict, model, plot_type: str) -> str:
+    pc = context["pc"]
+    features = pc.get_config("X_train_transformed")
+    if features is None or len(features) == 0:
+        raise ValueError("No clustering data is available for visualization.")
+
+    assigned = pc.assign_model(model)
+    cluster_series = (
+        assigned["Cluster"].astype(str).reset_index(drop=True)
+        if "Cluster" in assigned.columns
+        else pd.Series(["cluster"] * len(features))
+    )
+
+    if plot_type == "cluster":
+        if features.shape[1] >= 2:
+            coords = PCA(n_components=2, random_state=42).fit_transform(features)
+        else:
+            values = features.iloc[:, 0].to_numpy()
+            coords = np.column_stack([values, np.zeros(len(values))])
+        title = "Clustering Projection"
+    elif plot_type == "tsne":
+        perplexity = _resolve_tsne_perplexity(len(features))
+        reducer = TSNE(n_components=2, perplexity=perplexity, init="random", learning_rate="auto", random_state=42)
+        coords = reducer.fit_transform(features)
+        title = "Clustering t-SNE Projection"
+    else:
+        raise ValueError(f"Unsupported clustering plot type: {plot_type}")
+
+    plot_frame = pd.DataFrame({"x": coords[:, 0], "y": coords[:, 1], "cluster": cluster_series})
+    palette = ["#38bdf8", "#f59e0b", "#22c55e", "#ef4444", "#8b5cf6", "#14b8a6", "#eab308", "#f97316"]
+
+    plt.figure(figsize=(9, 6))
+    for index, (cluster_label, group) in enumerate(plot_frame.groupby("cluster")):
+        plt.scatter(
+            group["x"],
+            group["y"],
+            label=f"Cluster {cluster_label}",
+            alpha=0.82,
+            s=44,
+            color=palette[index % len(palette)],
+            edgecolors="white",
+            linewidths=0.5,
+        )
+    plt.title(title)
+    plt.xlabel("Component 1")
+    plt.ylabel("Component 2")
+    plt.legend()
+    return _figure_to_base64()
+
+
 def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data: bool = False) -> str:
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
@@ -1308,6 +1363,8 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
 
     if context["module_type"] == "anomaly" and plot_type in {"tsne", "umap"}:
         return _build_anomaly_embedding_plot(context, model, plot_type)
+    if context["module_type"] == "clustering" and plot_type in {"cluster", "tsne"}:
+        return _build_clustering_plot(context, model, plot_type)
 
     plot_attempts = [
         {"plot": plot_type, "save": True, "verbose": False, "use_train_data": use_train_data},

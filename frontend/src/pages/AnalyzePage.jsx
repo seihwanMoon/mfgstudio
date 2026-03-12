@@ -200,7 +200,7 @@ export default function AnalyzePage() {
           helperText={
             isShapSupported
               ? "테스트 데이터의 몇 번째 행을 설명할지 입력합니다. 예: `0`은 첫 번째 샘플입니다."
-              : "이 모듈은 SHAP 설명을 지원하지 않습니다. 왼쪽의 모델 플롯으로 이상치 분포와 구조를 확인하세요."
+              : "이 모듈은 SHAP 설명을 지원하지 않습니다. 왼쪽의 모델 플롯으로 분포와 구조를 확인하세요."
           }
         />
 

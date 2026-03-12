@@ -1,5 +1,14 @@
 export default function PlotRenderArea({ image, isLoading, plotLabel, plotFamily, moduleType }) {
-  const modeLabel = moduleType === "regression" ? "회귀" : moduleType === "classification" ? "분류" : moduleType
+  const modeLabel =
+    moduleType === "regression"
+      ? "회귀"
+      : moduleType === "classification"
+        ? "분류"
+        : moduleType === "clustering"
+          ? "클러스터링"
+          : moduleType === "anomaly"
+            ? "이상탐지"
+            : moduleType
   const familyLabel = plotFamily === "xai" ? "XAI" : "모델 진단"
 
   return (
