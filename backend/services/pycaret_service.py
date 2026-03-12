@@ -1,4 +1,5 @@
 import base64
+from io import BytesIO
 import json
 from pathlib import Path
 import re
@@ -9,6 +10,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import shap
+from sklearn.inspection import permutation_importance
 
 from config import settings
 from services.mlflow_service import (
@@ -51,7 +53,7 @@ METRIC_LABELS = {
 }
 
 EXPERIMENT_CONTEXTS: dict[int, dict] = {}
-MODEL_CATALOG_CACHE: dict[str, list[str]] = {}
+MODEL_CATALOG_CACHE: dict[str, list[dict]] = {}
 MODEL_CONTEXT_KEYS = {
     "trained": "trained_models",
     "tuned": "tuned_models",
@@ -217,15 +219,79 @@ def _build_model_catalog_bootstrap(module_type: str):
     raise ValueError(f"Unsupported module type: {module_type}")
 
 
-def _load_dynamic_model_catalog(module_type: str) -> list[str]:
+def _infer_model_family(module_type: str, estimator_id: str, name: str, reference: str) -> tuple[str, list[str]]:
+    haystack = " ".join([module_type, estimator_id, name, reference]).lower()
+    tags = {module_type}
+
+    if "turbo" in haystack:
+        tags.add("turbo")
+    if any(token in haystack for token in ["linear", "lasso", "ridge", "elastic", "lar", "omp", "bayesian ridge", "least angle"]):
+        family = "linear"
+        tags.update({"interpretable", "linear"})
+    elif any(token in haystack for token in ["lightgbm", "xgboost", "catboost", "gradient boosting", "gradientboosting", "adaboost", "gbm", "boost"]):
+        family = "boosting"
+        tags.update({"ensemble", "boosting", "tree_based"})
+    elif any(token in haystack for token in ["random forest", "extra trees", "forest", "bagging", "voting", "stacking", "ensemble"]):
+        family = "ensemble"
+        tags.update({"ensemble", "tree_based"})
+    elif any(token in haystack for token in ["tree", "decision tree", "dt"]):
+        family = "tree"
+        tags.add("tree_based")
+    elif any(token in haystack for token in ["knn", "neighbors", "neighbor"]):
+        family = "neighbors"
+        tags.add("distance_based")
+    elif any(token in haystack for token in ["svm", "support vector"]):
+        family = "svm"
+        tags.add("margin_based")
+    elif any(token in haystack for token in ["naive bayes", "bayes", "qda", "lda"]):
+        family = "probabilistic"
+        tags.add("interpretable")
+    elif any(token in haystack for token in ["k-means", "cluster", "hclust", "meanshift", "spectral", "affinity"]):
+        family = "clustering"
+        tags.add("distance_based")
+    elif any(token in haystack for token in ["outlier", "iforest", "anomaly", "lof", "svm"]):
+        family = "anomaly"
+        tags.add("outlier_detection")
+    elif any(token in haystack for token in ["arima", "ets", "prophet", "naive", "trend", "croston", "theta"]):
+        family = "forecasting"
+        tags.add("time_series")
+    else:
+        family = "other"
+
+    if module_type in {"classification", "regression"} and "interpretable" not in tags and family in {"linear", "tree", "probabilistic"}:
+        tags.add("interpretable")
+
+    return family, sorted(tags)
+
+
+def _load_dynamic_model_catalog(module_type: str) -> list[dict]:
     if module_type in MODEL_CATALOG_CACHE:
         return MODEL_CATALOG_CACHE[module_type]
 
     experiment = _build_model_catalog_bootstrap(module_type)
     models_df = experiment.models()
-    names = models_df["Name"].astype(str).tolist()
-    MODEL_CATALOG_CACHE[module_type] = names
-    return names
+    catalog = []
+    for estimator_id, row in models_df.iterrows():
+        name = str(row.get("Name", estimator_id))
+        reference = str(row.get("Reference", ""))
+        family, tags = _infer_model_family(module_type, str(estimator_id), name, reference)
+        turbo = bool(row.get("Turbo", False))
+        if turbo:
+            tags = sorted({*tags, "turbo"})
+        catalog.append(
+            {
+                "id": str(estimator_id),
+                "name": name,
+                "reference": reference,
+                "turbo": turbo,
+                "family": family,
+                "tags": tags,
+                "module_type": module_type,
+            }
+        )
+
+    MODEL_CATALOG_CACHE[module_type] = catalog
+    return catalog
 
 
 def _default_sort_key(module_type: str) -> str:
@@ -238,11 +304,25 @@ def _default_sort_key(module_type: str) -> str:
     }.get(module_type, "Accuracy")
 
 
-def list_available_models(module_type: str) -> list[str]:
+def list_available_models(module_type: str) -> list[dict]:
     try:
         return _load_dynamic_model_catalog(module_type)
     except Exception:
-        return MODULE_LIBRARY.get(module_type, MODULE_LIBRARY["classification"])
+        fallback = []
+        for name in MODULE_LIBRARY.get(module_type, MODULE_LIBRARY["classification"]):
+            family, tags = _infer_model_family(module_type, _slugify_algorithm(name), name, "")
+            fallback.append(
+                {
+                    "id": _slugify_algorithm(name),
+                    "name": name,
+                    "reference": "",
+                    "turbo": False,
+                    "family": family,
+                    "tags": tags,
+                    "module_type": module_type,
+                }
+            )
+        return fallback
 
 
 def _build_setup_kwargs(df: pd.DataFrame, module_type: str, params: dict, experiment_name: str) -> dict:
@@ -883,12 +963,36 @@ def _get_active_model(experiment_id: int, algorithm: str):
     return context, model
 
 
+def _clear_generated_plot_files() -> None:
+    for pattern in ("*.png", "*.html"):
+        for file_path in Path(".").glob(pattern):
+            file_path.unlink(missing_ok=True)
+
+
+def _read_latest_png() -> str:
+    files = sorted(Path(".").glob("*.png"), key=lambda item: item.stat().st_mtime)
+    if not files:
+        return ""
+    latest = files[-1]
+    encoded = base64.b64encode(latest.read_bytes()).decode("utf-8")
+    latest.unlink(missing_ok=True)
+    return encoded
+
+
+def _figure_to_base64() -> str:
+    buffer = BytesIO()
+    plt.tight_layout()
+    plt.savefig(buffer, format="png", bbox_inches="tight")
+    plt.close()
+    buffer.seek(0)
+    return base64.b64encode(buffer.read()).decode("utf-8")
+
+
 def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data: bool = False) -> str:
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
 
-    for png_file in Path(".").glob("*.png"):
-        png_file.unlink(missing_ok=True)
+    _clear_generated_plot_files()
 
     plot_kwargs = {
         "plot": plot_type,
@@ -899,13 +1003,122 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
         pc.plot_model(model, use_train_data=use_train_data, **plot_kwargs)
     except TypeError:
         pc.plot_model(model, **plot_kwargs)
-    files = sorted(Path(".").glob("*.png"), key=lambda item: item.stat().st_mtime)
-    if not files:
+    return _read_latest_png()
+
+
+def get_interpret_plot(
+    experiment_id: int,
+    algorithm: str,
+    plot_type: str,
+    use_train_data: bool = False,
+    row_index: int | None = None,
+) -> str:
+    context, model = _get_active_model(experiment_id, algorithm)
+    pc = context["pc"]
+    supervised = context["module_type"] in {"classification", "regression"}
+    features_key = "X_train_transformed" if use_train_data or not supervised else "X_test_transformed"
+    target_key = "y_train" if use_train_data or not supervised else "y_test"
+    features = pc.get_config(features_key)
+
+    if features is None or len(features) == 0:
         return ""
-    latest = files[-1]
-    encoded = base64.b64encode(latest.read_bytes()).decode("utf-8")
-    latest.unlink(missing_ok=True)
-    return encoded
+
+    if plot_type == "summary":
+        if context["module_type"] == "classification":
+            explainer = shap.Explainer(model.predict_proba, features)
+            explanation = explainer(features)
+            values = explanation.values
+            if values.ndim == 3:
+                importance = np.mean(np.abs(values), axis=(0, 2))
+            else:
+                importance = np.mean(np.abs(values), axis=0)
+        elif context["module_type"] == "regression":
+            explainer = shap.Explainer(model.predict, features)
+            explanation = explainer(features)
+            importance = np.mean(np.abs(explanation.values), axis=0)
+        else:
+            raise ValueError(f"Unsupported XAI summary module: {context['module_type']}")
+
+        ranked = (
+            pd.Series(importance, index=features.columns)
+            .sort_values(ascending=False)
+            .head(12)
+            .sort_values(ascending=True)
+        )
+        plt.figure(figsize=(10, 6))
+        plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#38bdf8")
+        plt.title("SHAP Summary Importance")
+        plt.xlabel("Mean |SHAP value|")
+        return _figure_to_base64()
+
+    if plot_type == "pfi":
+        if not supervised:
+            raise ValueError("Permutation importance is only supported for classification and regression experiments")
+        target = pc.get_config(target_key)
+        scores = permutation_importance(model, features, np.ravel(target), n_repeats=5, random_state=42, n_jobs=1)
+        ranked = (
+            pd.Series(scores.importances_mean, index=features.columns)
+            .sort_values(ascending=False)
+            .head(12)
+            .sort_values(ascending=True)
+        )
+        plt.figure(figsize=(10, 6))
+        plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#22c55e")
+        plt.title("Permutation Feature Importance")
+        plt.xlabel("Mean importance")
+        return _figure_to_base64()
+
+    raise ValueError(f"Unsupported XAI plot type: {plot_type}")
+
+
+def list_plot_options(module_type: str) -> dict:
+    model_plots = {
+        "classification": [
+            {"key": "auc", "label": "ROC AUC", "family": "plot"},
+            {"key": "confusion_matrix", "label": "혼동 행렬", "family": "plot"},
+            {"key": "feature", "label": "변수 중요도", "family": "plot"},
+            {"key": "learning", "label": "학습 곡선", "family": "plot"},
+            {"key": "pr", "label": "정밀도-재현율", "family": "plot"},
+            {"key": "calibration", "label": "보정 곡선", "family": "plot"},
+        ],
+        "regression": [
+            {"key": "residuals", "label": "잔차 플롯", "family": "plot"},
+            {"key": "error", "label": "예측 오차", "family": "plot"},
+            {"key": "cooks", "label": "영향도", "family": "plot"},
+            {"key": "feature", "label": "변수 중요도", "family": "plot"},
+            {"key": "learning", "label": "학습 곡선", "family": "plot"},
+        ],
+        "clustering": [
+            {"key": "cluster", "label": "클러스터 분포", "family": "plot"},
+            {"key": "tsne", "label": "t-SNE", "family": "plot"},
+            {"key": "elbow", "label": "엘보우", "family": "plot"},
+        ],
+        "anomaly": [
+            {"key": "tsne", "label": "t-SNE", "family": "plot"},
+            {"key": "umap", "label": "UMAP", "family": "plot"},
+        ],
+        "timeseries": [
+            {"key": "forecast", "label": "예측 추세", "family": "plot"},
+            {"key": "residuals", "label": "잔차 플롯", "family": "plot"},
+            {"key": "acf", "label": "ACF", "family": "plot"},
+            {"key": "pacf", "label": "PACF", "family": "plot"},
+        ],
+    }
+    xai_plots = {
+        "classification": [
+            {"key": "summary", "label": "SHAP 요약", "family": "xai"},
+            {"key": "pfi", "label": "Permutation 중요도", "family": "xai"},
+        ],
+        "regression": [
+            {"key": "summary", "label": "SHAP 요약", "family": "xai"},
+            {"key": "pfi", "label": "Permutation 중요도", "family": "xai"},
+        ],
+    }
+    return {
+        "module_type": module_type,
+        "plots": model_plots.get(module_type, []),
+        "xai": xai_plots.get(module_type, []),
+    }
 
 
 def get_shap(experiment_id: int, algorithm: str, row_index: int = 0) -> dict:

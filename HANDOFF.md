@@ -15,6 +15,9 @@ Implemented locally:
 - Tune page controls for advanced PyCaret actions
 - Finalize page selection support for generated candidates
 - MLflow ops screen text cleanup and loading-state cleanup
+- dynamic PyCaret model-catalog metadata and compare-screen family/scope filters
+- analyze-screen cleanup with separate diagnostic and XAI plot groups
+- backend XAI plot rendering for `summary` and `pfi`
 
 ## Current local state
 
@@ -58,8 +61,8 @@ What changed:
 
 1. `git status --short`
 2. `docker compose up --build -d backend frontend`
-3. continue with P3 dynamic model-catalog metadata expansion
-4. continue with P5 Analyze / XAI enhancement
+3. continue with richer XAI variants beyond `summary` / `pfi`
+4. review classification-specific optimization hooks
 5. after implementation, run normal verification and commit
 
 ## Useful commands

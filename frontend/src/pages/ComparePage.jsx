@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { trainAPI } from "../api"
@@ -9,11 +9,32 @@ import MLflowRunLinks from "../components/compare/MLflowRunLinks"
 import { useSSECompare } from "../hooks/useSSECompare"
 import useStore, { COMPARE_SORT_OPTIONS, getDefaultCompareSort } from "../store/useStore"
 
+function filterCatalog(catalog, options) {
+  return catalog.filter((item) => {
+    const scope = options.catalog_scope || "all"
+    const family = options.family || "all"
+
+    if (scope === "turbo" && !item.turbo) return false
+    if (scope === "full" && item.turbo) return false
+    if (family !== "all" && item.family !== family) return false
+
+    return true
+  })
+}
+
 export default function ComparePage() {
   const navigate = useNavigate()
-  const { currentExperimentId, compareOptions, compareResults, setCompareOption, setupParams, selectedModelsForTune } = useStore()
+  const {
+    currentExperimentId,
+    compareOptions,
+    compareResults,
+    setCompareOption,
+    setupParams,
+    selectedModelsForTune,
+  } = useStore()
   const [isRunning, setIsRunning] = useState(false)
-  const [availableModels, setAvailableModels] = useState([])
+  const [modelCatalog, setModelCatalog] = useState([])
+  const [familyOptions, setFamilyOptions] = useState([])
   const [error, setError] = useState("")
   const { startCompare } = useSSECompare()
   const moduleType = setupParams.module_type || "classification"
@@ -24,11 +45,19 @@ export default function ComparePage() {
       ? compareResults.filter((row) => selectedModelsForTune.includes(row.algorithm)).slice(0, 3)
       : compareResults.slice(0, 3)
 
+  const filteredCatalog = useMemo(() => filterCatalog(modelCatalog, compareOptions), [modelCatalog, compareOptions])
+
   useEffect(() => {
     trainAPI
       .getModels(moduleType)
-      .then((response) => setAvailableModels(response.models || []))
-      .catch(() => setAvailableModels([]))
+      .then((response) => {
+        setModelCatalog(response.catalog || [])
+        setFamilyOptions(response.families || [])
+      })
+      .catch(() => {
+        setModelCatalog([])
+        setFamilyOptions([])
+      })
   }, [moduleType])
 
   useEffect(() => {
@@ -36,6 +65,13 @@ export default function ComparePage() {
       setCompareOption("sort", getDefaultCompareSort(moduleType))
     }
   }, [compareOptions.sort, metricOptions, moduleType, setCompareOption])
+
+  useEffect(() => {
+    const currentFamily = compareOptions.family || "all"
+    if (currentFamily !== "all" && !familyOptions.includes(currentFamily)) {
+      setCompareOption("family", "all")
+    }
+  }, [compareOptions.family, familyOptions, setCompareOption])
 
   async function handleStart() {
     if (!currentExperimentId) {
@@ -48,6 +84,12 @@ export default function ComparePage() {
       setCompareOption("sort", sanitizedSort)
     }
 
+    const include = filteredCatalog.map((item) => item.name)
+    if (!include.length) {
+      setError("현재 필터에 맞는 비교 대상 모델이 없습니다.")
+      return
+    }
+
     setError("")
     setIsRunning(true)
     try {
@@ -56,6 +98,7 @@ export default function ComparePage() {
         options: {
           ...compareOptions,
           sort: sanitizedSort,
+          include: include.length === modelCatalog.length ? undefined : include,
         },
       })
 
@@ -67,7 +110,7 @@ export default function ComparePage() {
           try {
             await trainAPI.getCompareResult(currentExperimentId)
           } catch (streamError) {
-            setError(streamError?.detail || "모델 비교 중 오류가 발생했습니다.")
+            setError(streamError?.detail || "모델 비교 결과를 불러오는 중 오류가 발생했습니다.")
           }
         }
       )
@@ -84,8 +127,10 @@ export default function ComparePage() {
         onChange={setCompareOption}
         onStart={handleStart}
         isRunning={isRunning}
-        modelOptions={availableModels}
         metricOptions={metricOptions}
+        familyOptions={familyOptions}
+        totalModelCount={modelCatalog.length}
+        filteredModelCount={filteredCatalog.length}
       />
       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         {bestModel ? (

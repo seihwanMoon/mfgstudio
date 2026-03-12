@@ -270,7 +270,15 @@ def get_compare_result(experiment_id: int, db: Session = Depends(get_db)):
 
 @router.get("/models")
 def list_models(module_type: str = "classification"):
-    return {"models": list_available_models(module_type)}
+    catalog = list_available_models(module_type)
+    families = sorted({item.get("family", "other") for item in catalog})
+    tags = sorted({tag for item in catalog for tag in item.get("tags", [])})
+    return {
+        "models": [item["name"] for item in catalog],
+        "catalog": catalog,
+        "families": families,
+        "tags": tags,
+    }
 
 
 @router.post("/tune")

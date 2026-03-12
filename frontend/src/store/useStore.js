@@ -49,6 +49,8 @@ const useStore = create((set) => ({
     sort: getDefaultCompareSort("classification"),
     n_select: 3,
     budget_time: null,
+    catalog_scope: "all",
+    family: "all",
     exclude: [],
   },
   setCurrentStep: (currentStep) => set({ currentStep }),

@@ -253,6 +253,8 @@ All planned tasks are currently complete.
 | 2026-03-10 | Replaced the fixed model list API with PyCaret bootstrap experiments so `GET /api/train/models` now reflects the actual installed estimator catalog for classification, regression, clustering, anomaly, and time series modules | Codex |
 | 2026-03-10 | Began PyCaret late-stage workflow expansion with `blend_models()`, `stack_models()`, and `automl()` candidate APIs, updated Tune/Finalize screens to surface generated candidates, rebuilt backend/frontend containers, and prepared handoff notes for the remaining MLflow blend-run termination issue | Codex |
 | 2026-03-12 | Fixed blend-path MLflow lifecycle handling so new `blend::Blend Ensemble (2)` runs and internal `Voting Regressor` runs terminate cleanly, re-verified advanced candidate generation through the live API, and cleaned stale RUNNING blend-related runs from MLflow history | Codex |
+| 2026-03-12 | Expanded the PyCaret model catalog API with estimator metadata (`id`, `reference`, `turbo`, `family`, `tags`), connected compare-screen family/scope filters to real `include` lists, rebuilt backend/frontend containers, and re-verified filtered compare execution with linear-regression-only runs | Codex |
+| 2026-03-12 | Extended Analyze/XAI with separate diagnostic and XAI plot catalogs, cleaned analyze-screen copy/components, added backend-generated `summary` and `pfi` XAI images without new runtime dependency conflicts, and re-verified both XAI plot types through the live API | Codex |
 
 ---
 

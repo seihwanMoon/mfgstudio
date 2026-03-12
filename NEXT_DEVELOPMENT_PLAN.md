@@ -41,17 +41,22 @@ Current result:
 
 ### P3. Dynamic Model Catalog
 
-Status: In Progress
+Status: Completed on 2026-03-12
 
 Current result:
 
 - `GET /api/train/models` now uses PyCaret bootstrap experiments
 - estimator lists are no longer tied to a tiny fixed hardcoded catalog
-
-Remaining:
-
-- expose richer estimator metadata
-- connect metadata to compare-screen filters
+- richer estimator metadata is exposed:
+  - `id`
+  - `name`
+  - `reference`
+  - `turbo`
+  - `family`
+  - `tags`
+- compare-screen filters now use catalog metadata for:
+  - model scope (`all` / `turbo` / `full`)
+  - model family (`linear`, `tree`, `boosting`, `ensemble`, etc.)
 
 ### P4. PyCaret Late-Stage Workflow Expansion
 
@@ -75,13 +80,28 @@ Remaining:
 
 ### P5. Analyze / XAI Enhancement
 
-Status: Planned
+Status: In Progress
 
 Scope:
 
 - expand `interpret_model()`
 - review `dashboard()` / `check_fairness()`
 - extend beyond SHAP into more native PyCaret explainability
+
+Current result:
+
+- analyze plot catalog now separates:
+  - diagnostic `plot_model()` options
+  - XAI options
+- analyze screen now supports XAI plot rendering for:
+  - `summary`
+  - `pfi`
+- analyze page copy and selectors were cleaned up during the same pass
+
+Remaining:
+
+- add richer XAI variants beyond `summary` / `pfi`
+- review whether `pdp` or fairness-related views should be added without destabilizing runtime dependencies
 
 ### P6. Classification-Specific Optimization
 
@@ -105,10 +125,9 @@ Current result:
 
 ## Execution order for the next session
 
-1. Expand dynamic model-catalog metadata
-2. Move to Analyze / XAI enhancement
-3. Add classification-specific optimization
-4. Polish advanced PyCaret candidate UX
+1. Move to Analyze / XAI enhancement
+2. Add classification-specific optimization
+3. Polish advanced PyCaret candidate UX
 
 ## Notes
 

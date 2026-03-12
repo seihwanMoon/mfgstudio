@@ -17,12 +17,12 @@ export default function ShapWaterfall({ result, moduleType }) {
       >
         아직 SHAP 결과가 없습니다.
         <br />
-        오른쪽 아래에서 행 번호를 입력한 뒤 분석을 실행하세요.
+        오른쪽 아래에서 행 번호를 입력하고 분석을 실행하세요.
       </div>
     )
   }
 
-  const scoreLabel = moduleType === "regression" ? "예측값" : "예측 신뢰도"
+  const scoreLabel = moduleType === "regression" ? "예측값" : "예측 확률"
 
   return (
     <div

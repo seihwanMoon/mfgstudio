@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { analyzeAPI, trainAPI } from "../api"
@@ -9,6 +9,10 @@ import ShapWaterfall from "../components/analyze/ShapWaterfall"
 import TrainTestToggle from "../components/analyze/TrainTestToggle"
 import useStore from "../store/useStore"
 
+function getOptionKey(option) {
+  return `${option.family}:${option.key}`
+}
+
 export default function AnalyzePage() {
   const navigate = useNavigate()
   const { currentExperimentId, selectedModelsForTune, setupParams } = useStore()
@@ -16,8 +20,8 @@ export default function AnalyzePage() {
 
   const [models, setModels] = useState([])
   const [modelId, setModelId] = useState(null)
-  const [plots, setPlots] = useState([])
-  const [plotType, setPlotType] = useState("")
+  const [plotOptions, setPlotOptions] = useState([])
+  const [selectedPlotKey, setSelectedPlotKey] = useState("")
   const [image, setImage] = useState("")
   const [rowIndex, setRowIndex] = useState(0)
   const [shapResult, setShapResult] = useState(null)
@@ -25,6 +29,11 @@ export default function AnalyzePage() {
   const [isLoadingPlot, setIsLoadingPlot] = useState(false)
   const [plotError, setPlotError] = useState("")
   const [shapError, setShapError] = useState("")
+
+  const selectedPlot = useMemo(
+    () => plotOptions.find((option) => getOptionKey(option) === selectedPlotKey) || null,
+    [plotOptions, selectedPlotKey]
+  )
 
   useEffect(() => {
     if (!currentExperimentId) return
@@ -36,32 +45,37 @@ export default function AnalyzePage() {
     })
 
     analyzeAPI.listPlots(moduleType).then((response) => {
-      const nextPlots = response.plots || []
-      setPlots(nextPlots)
-      setPlotType((current) => (nextPlots.includes(current) ? current : nextPlots[0] || ""))
+      const nextOptions = [...(response.plots || []), ...(response.xai || [])]
+      setPlotOptions(nextOptions)
+      setSelectedPlotKey((current) => {
+        const hasCurrent = nextOptions.some((option) => getOptionKey(option) === current)
+        return hasCurrent ? current : getOptionKey(nextOptions[0] || { family: "plot", key: "" })
+      })
     })
   }, [currentExperimentId, moduleType, selectedModelsForTune])
 
   useEffect(() => {
-    if (!modelId || !plotType) return
+    if (!modelId || !selectedPlot) return
     handlePlot()
-  }, [modelId, plotType, useTrainData])
+  }, [modelId, selectedPlotKey, useTrainData])
 
   async function handlePlot() {
-    if (!modelId || !plotType) return
+    if (!modelId || !selectedPlot) return
 
     setPlotError("")
     setIsLoadingPlot(true)
     try {
       const response = await analyzeAPI.plot({
         model_id: modelId,
-        plot_type: plotType,
+        plot_type: selectedPlot.key,
+        plot_family: selectedPlot.family,
         use_train_data: useTrainData,
+        row_index: rowIndex,
       })
       setImage(response.base64_image || "")
     } catch (error) {
       setImage("")
-      setPlotError(error?.detail || "플롯 생성 중 오류가 발생했습니다.")
+      setPlotError(error?.detail || "분석 플롯 생성 중 오류가 발생했습니다.")
     } finally {
       setIsLoadingPlot(false)
     }
@@ -84,8 +98,8 @@ export default function AnalyzePage() {
   }
 
   return (
-    <div style={{ height: "100%", display: "grid", gridTemplateColumns: "240px 1fr 320px" }}>
-      <PlotSelector plots={plots} value={plotType} onChange={setPlotType} onRefresh={handlePlot} />
+    <div style={{ height: "100%", display: "grid", gridTemplateColumns: "260px 1fr 320px" }}>
+      <PlotSelector plots={plotOptions} value={selectedPlotKey} onChange={setSelectedPlotKey} onRefresh={handlePlot} />
 
       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         <div
@@ -104,9 +118,9 @@ export default function AnalyzePage() {
             <div style={{ color: "var(--text-primary)", fontSize: 14, lineHeight: 1.6 }}>
               1. 분석할 모델을 고릅니다.
               <br />
-              2. 왼쪽에서 플롯 종류를 선택하면 바로 그래프가 생성됩니다.
+              2. 왼쪽에서 진단 플롯 또는 XAI 플롯을 선택하면 바로 그래프가 생성됩니다.
               <br />
-              3. 오른쪽에서 행 번호를 넣고 SHAP 분석을 실행하면 해당 예측에 영향을 준 주요 변수를 확인할 수 있습니다.
+              3. 오른쪽에서는 테스트 행 번호를 기준으로 SHAP 설명을 확인할 수 있습니다.
             </div>
           </div>
 
@@ -150,7 +164,7 @@ export default function AnalyzePage() {
           </div>
         ) : null}
 
-        <PlotRenderArea image={image} isLoading={isLoadingPlot} plotType={plotType} moduleType={moduleType} />
+        <PlotRenderArea image={image} isLoading={isLoadingPlot} plotLabel={selectedPlot?.label} plotFamily={selectedPlot?.family} moduleType={moduleType} />
       </div>
 
       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
