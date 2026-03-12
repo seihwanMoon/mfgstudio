@@ -362,6 +362,15 @@ def _build_setup_kwargs(df: pd.DataFrame, module_type: str, params: dict, experi
         kwargs["target"] = params["target_col"]
         kwargs["train_size"] = params.get("train_size", 0.8)
         kwargs["fold"] = params.get("fold", 10)
+    elif module_type == "timeseries":
+        kwargs["target"] = params.get("target_col")
+        if params.get("index_col"):
+            kwargs["index"] = params["index_col"]
+        kwargs["fold"] = params.get("fold", 3)
+        kwargs["fh"] = params.get("fh", 1)
+        if params.get("ignore_features"):
+            kwargs["ignore_features"] = params["ignore_features"]
+        return kwargs
 
     if params.get("normalize"):
         kwargs["normalize"] = True
@@ -391,6 +400,17 @@ def _requires_safe_target_alias(target_col: str) -> bool:
     return not target_col.replace("_", "").isalnum()
 
 
+def _infer_timeseries_index_column(df: pd.DataFrame, target_col: str | None = None) -> str | None:
+    preferred_names = ("date", "datetime", "timestamp", "time", "ds")
+    candidates = [column for column in df.columns if column != target_col]
+    ordered = sorted(candidates, key=lambda column: (0 if str(column).lower() in preferred_names else 1, str(column)))
+    for column in ordered:
+        parsed = pd.to_datetime(df[column], errors="coerce")
+        if parsed.notna().all() and parsed.nunique(dropna=True) == len(parsed):
+            return str(column)
+    return None
+
+
 def _prepare_training_frame(df: pd.DataFrame, params: dict, context: dict) -> tuple[pd.DataFrame, dict]:
     prepared_df = df.copy()
     prepared_params = dict(params)
@@ -407,6 +427,7 @@ def _prepare_training_frame(df: pd.DataFrame, params: dict, context: dict) -> tu
     context["target_alias"] = None
     context["target_original"] = params.get("target_col")
     context["column_map"] = column_map
+    context["index_col"] = None
 
     if target_col and target_col in prepared_df.columns and _requires_safe_target_alias(target_col):
         alias = "__target__"
@@ -417,6 +438,14 @@ def _prepare_training_frame(df: pd.DataFrame, params: dict, context: dict) -> tu
         prepared_df = prepared_df.rename(columns={target_col: alias})
         prepared_params["target_col"] = alias
         context["target_alias"] = alias
+
+    if context.get("module_type") == "timeseries":
+        index_col = _infer_timeseries_index_column(prepared_df, prepared_params.get("target_col"))
+        if index_col:
+            prepared_df[index_col] = pd.to_datetime(prepared_df[index_col], errors="coerce")
+            prepared_df = prepared_df.dropna(subset=[index_col]).sort_values(index_col).reset_index(drop=True)
+            prepared_params["index_col"] = index_col
+            context["index_col"] = index_col
 
     return prepared_df, prepared_params
 
@@ -526,13 +555,18 @@ def run_setup(
     )
     context = _activate_experiment(experiment_id)
     pc = context["pc"]
-    transformed = pc.get_config("X_train_transformed")
+    if module_type == "timeseries":
+        transformed = pc.get_config("y_train")
+        transformed_shape = [len(transformed), 1] if transformed is not None else [0, 0]
+    else:
+        transformed = pc.get_config("X_train_transformed")
+        transformed_shape = list(transformed.shape) if transformed is not None else [0, 0]
     context["mlflow_experiment_id"] = ensure_experiment(mlflow_experiment_name)
     _save_experiment_snapshot(context)
     _persist_context_metadata(context)
     return {
         "pipeline_steps": _extract_pipeline_steps(pc),
-        "transformed_shape": list(transformed.shape),
+        "transformed_shape": transformed_shape,
         "mlflow_experiment_id": context["mlflow_experiment_id"],
         "mlflow_experiment_name": mlflow_experiment_name,
         "module_type": module_type,

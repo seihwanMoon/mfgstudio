@@ -36,13 +36,18 @@ export default function SetupPage() {
     if (apiCode) return apiCode
     const lines = [IMPORT_MAP[setupParams.module_type] || IMPORT_MAP.classification, "", "s = setup(", "    data=df,"]
     if (setupParams.target_col) lines.push(`    target='${setupParams.target_col}',`)
-    lines.push(`    train_size=${setupParams.train_size},`)
-    lines.push(`    fold=${setupParams.fold},`)
-    if (setupParams.normalize) lines.push("    normalize=True,")
-    if (setupParams.normalize_method) lines.push(`    normalize_method='${setupParams.normalize_method}',`)
-    if (setupParams.fix_imbalance) lines.push("    fix_imbalance=True,")
-    if (setupParams.remove_outliers) lines.push("    remove_outliers=True,")
-    lines.push(`    imputation_type='${setupParams.imputation_type}',`)
+    if (setupParams.module_type === "timeseries") {
+      lines.push(`    fold=${setupParams.fold || 3},`)
+      lines.push("    fh=1,")
+    } else {
+      lines.push(`    train_size=${setupParams.train_size},`)
+      lines.push(`    fold=${setupParams.fold},`)
+      if (setupParams.normalize) lines.push("    normalize=True,")
+      if (setupParams.normalize_method) lines.push(`    normalize_method='${setupParams.normalize_method}',`)
+      if (setupParams.fix_imbalance) lines.push("    fix_imbalance=True,")
+      if (setupParams.remove_outliers) lines.push("    remove_outliers=True,")
+      lines.push(`    imputation_type='${setupParams.imputation_type}',`)
+    }
     lines.push(")")
     return lines.join("\n")
   }, [apiCode, setupParams])
