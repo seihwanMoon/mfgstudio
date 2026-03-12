@@ -84,7 +84,9 @@ def _sanitize_column_name(name: str) -> str:
 
 
 def _slugify_algorithm(name: str) -> str:
-    return _sanitize_column_name(name).lower().replace(" ", "_")
+    normalized = _sanitize_column_name(name).lower()
+    slug = re.sub(r"[^\w]+", "_", normalized, flags=re.UNICODE).strip("_")
+    return slug or "model"
 
 
 def _humanize_estimator_name(name: str) -> str:
@@ -531,6 +533,8 @@ def _activate_experiment(experiment_id: int):
     if context["module_type"] in {"classification", "regression"}:
         feature_frame = prepared_df.drop(columns=[prepared_params["target_col"]], errors="ignore")
         context["input_example"] = feature_frame.head(1).copy()
+    elif context["module_type"] == "timeseries":
+        context["input_example"] = None
     else:
         context["input_example"] = prepared_df.head(1).copy()
     _restore_persisted_models(context)
