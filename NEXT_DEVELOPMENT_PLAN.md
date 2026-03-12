@@ -1,6 +1,6 @@
 # Next Development Plan
 
-Last updated: 2026-03-10
+Last updated: 2026-03-12
 
 ## Goal
 
@@ -66,12 +66,12 @@ Current result:
 - generated advanced candidates are inserted back into compare-result rows
 - Tune page includes advanced PyCaret controls
 - Finalize page can target generated candidate rows directly
+- blend-path MLflow lifecycle was fixed on 2026-03-12 so new `blend::...` and internal `Voting Regressor` runs finish correctly
 
-Current blocker:
+Remaining:
 
-- `blend::Blend Ensemble (2)` may remain `RUNNING` in MLflow
-- an internal `Voting Regressor` MLflow run may also remain `RUNNING`
-- build, compile, and Docker rebuild all pass, but this MLflow lifecycle issue is still open
+- validate stack/blend/automl UX polish in the Tune and Finalize screens
+- decide whether advanced candidate rows need richer metadata in compare/finalize views
 
 ### P5. Analyze / XAI Enhancement
 
@@ -105,10 +105,10 @@ Current result:
 
 ## Execution order for the next session
 
-1. Fix blend-path MLflow run termination
-2. Re-verify `blend / stack / automl`
-3. Expand dynamic model-catalog metadata
-4. Move to Analyze / XAI enhancement
+1. Expand dynamic model-catalog metadata
+2. Move to Analyze / XAI enhancement
+3. Add classification-specific optimization
+4. Polish advanced PyCaret candidate UX
 
 ## Notes
 

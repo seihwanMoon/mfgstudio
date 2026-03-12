@@ -252,6 +252,7 @@ All planned tasks are currently complete.
 | 2026-03-10 | Implemented PyCaret experiment persistence with `save_experiment()` / `load_experiment()`, cached compare/tuned model artifacts under `data/experiments/`, persisted context metadata to disk, and verified analyze/XAI still works after clearing in-memory contexts | Codex |
 | 2026-03-10 | Replaced the fixed model list API with PyCaret bootstrap experiments so `GET /api/train/models` now reflects the actual installed estimator catalog for classification, regression, clustering, anomaly, and time series modules | Codex |
 | 2026-03-10 | Began PyCaret late-stage workflow expansion with `blend_models()`, `stack_models()`, and `automl()` candidate APIs, updated Tune/Finalize screens to surface generated candidates, rebuilt backend/frontend containers, and prepared handoff notes for the remaining MLflow blend-run termination issue | Codex |
+| 2026-03-12 | Fixed blend-path MLflow lifecycle handling so new `blend::Blend Ensemble (2)` runs and internal `Voting Regressor` runs terminate cleanly, re-verified advanced candidate generation through the live API, and cleaned stale RUNNING blend-related runs from MLflow history | Codex |
 
 ---
 
@@ -262,7 +263,7 @@ Symptom: `docker compose up --build` is still not fully verified.
 
 ### [2026-03-10] P4 blend run termination
 Symptom: `blend::Blend Ensemble (2)` may remain `RUNNING` in MLflow even after the API request returns successfully.
-Status: reproducible, not resolved yet.
+Status: resolved on 2026-03-12.
 Cause: The first attempt was blocked by Docker engine unavailability, and the later attempt exposed backend dependency conflicts (`pycaret 3.3.2` with `pandas==2.2.1`, then `shap==0.49.1`).
 Resolution: Docker engine is now running, and `backend/requirements.txt` was aligned to `pandas==2.1.4` and `shap==0.44.1`. Full rebuild still needs one uninterrupted retry.
 

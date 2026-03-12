@@ -2,6 +2,7 @@ import base64
 import json
 from pathlib import Path
 import re
+import time
 
 import matplotlib
 from matplotlib import pyplot as plt
@@ -10,7 +11,12 @@ import pandas as pd
 import shap
 
 from config import settings
-from services.mlflow_service import ensure_experiment, log_sklearn_model_run
+from services.mlflow_service import (
+    ensure_experiment,
+    log_sklearn_model_run,
+    terminate_recent_running_runs,
+    terminate_running_runs_by_name,
+)
 
 matplotlib.use("Agg")
 plt.rcParams["font.family"] = ["Malgun Gothic", "NanumGothic", "AppleGothic", "DejaVu Sans"]
@@ -714,6 +720,12 @@ def blend_models_real(experiment_id: int, algorithms: list[str], options: dict |
         raise ValueError("blend_models requires at least 2 candidate models")
 
     pc = context["pc"]
+    operation_started_ms = int(time.time() * 1000)
+    algorithm_label = f"Blend Ensemble ({len(algorithms)})"
+    terminate_running_runs_by_name(
+        str(context.get("mlflow_experiment_id") or ensure_experiment(context["experiment_name"])),
+        {f"blend::{algorithm_label}", "Voting Regressor"},
+    )
     estimator_list = [_get_candidate_model(context, algorithm) for algorithm in algorithms]
     blend_model = pc.blend_models(
         estimator_list=estimator_list,
@@ -722,7 +734,6 @@ def blend_models_real(experiment_id: int, algorithms: list[str], options: dict |
         verbose=False,
     )
     after_frame = pc.pull().copy()
-    algorithm_label = f"Blend Ensemble ({len(algorithms)})"
     context["trained_models"][algorithm_label] = blend_model
     _cache_model_artifact(context, "trained", algorithm_label, blend_model)
     metrics = _extract_summary_metrics(after_frame)
@@ -742,6 +753,8 @@ def blend_models_real(experiment_id: int, algorithms: list[str], options: dict |
             "member_algorithms": ", ".join(algorithms),
         },
     )
+    terminate_recent_running_runs(str(run_info["experiment_id"]), operation_started_ms)
+    terminate_running_runs_by_name(str(run_info["experiment_id"]), {f"blend::{algorithm_label}", "Voting Regressor"})
     _save_experiment_snapshot(context)
     _persist_context_metadata(context)
     return {
@@ -762,6 +775,12 @@ def stack_models_real(experiment_id: int, algorithms: list[str], options: dict |
         raise ValueError("stack_models requires at least 2 candidate models")
 
     pc = context["pc"]
+    operation_started_ms = int(time.time() * 1000)
+    algorithm_label = f"Stack Ensemble ({len(algorithms)})"
+    terminate_running_runs_by_name(
+        str(context.get("mlflow_experiment_id") or ensure_experiment(context["experiment_name"])),
+        {f"stack::{algorithm_label}", "Stacking Regressor"},
+    )
     estimator_list = [_get_candidate_model(context, algorithm) for algorithm in algorithms]
     stack_model = pc.stack_models(
         estimator_list=estimator_list,
@@ -770,7 +789,6 @@ def stack_models_real(experiment_id: int, algorithms: list[str], options: dict |
         verbose=False,
     )
     after_frame = pc.pull().copy()
-    algorithm_label = f"Stack Ensemble ({len(algorithms)})"
     context["trained_models"][algorithm_label] = stack_model
     _cache_model_artifact(context, "trained", algorithm_label, stack_model)
     metrics = _extract_summary_metrics(after_frame)
@@ -790,6 +808,8 @@ def stack_models_real(experiment_id: int, algorithms: list[str], options: dict |
             "member_algorithms": ", ".join(algorithms),
         },
     )
+    terminate_recent_running_runs(str(run_info["experiment_id"]), operation_started_ms)
+    terminate_running_runs_by_name(str(run_info["experiment_id"]), {f"stack::{algorithm_label}", "Stacking Regressor"})
     _save_experiment_snapshot(context)
     _persist_context_metadata(context)
     return {
@@ -808,6 +828,7 @@ def automl_best_real(experiment_id: int, options: dict | None = None) -> dict:
     _require_supervised_module(context)
 
     pc = context["pc"]
+    operation_started_ms = int(time.time() * 1000)
     automl_model = pc.automl(
         optimize=options.get("optimize") or _default_sort_key(context["module_type"]),
         use_holdout=bool(options.get("use_holdout", False)),
@@ -834,6 +855,7 @@ def automl_best_real(experiment_id: int, options: dict | None = None) -> dict:
             "resolved_model_name": resolved_name,
         },
     )
+    terminate_recent_running_runs(str(run_info["experiment_id"]), operation_started_ms)
     _save_experiment_snapshot(context)
     _persist_context_metadata(context)
     return {

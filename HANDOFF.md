@@ -1,10 +1,10 @@
 # HANDOFF
 
-Last updated: 2026-03-10
+Last updated: 2026-03-12
 
 ## Summary
 
-Today's work focused on the next PyCaret-aligned stage after `compare_models()` and `tune_model()`.
+Recent work focused on the next PyCaret-aligned stage after `compare_models()` and `tune_model()`.
 
 Implemented locally:
 
@@ -18,9 +18,9 @@ Implemented locally:
 
 ## Current local state
 
-The working tree is not clean yet.
+This handoff assumes the current blend-lifecycle fix and related documentation updates are committed locally.
 
-Main modified files:
+Key files touched in this phase:
 
 - [backend/services/pycaret_service.py](D:/GITHUB/mfgstudio/backend/services/pycaret_service.py)
 - [backend/services/mlflow_service.py](D:/GITHUB/mfgstudio/backend/services/mlflow_service.py)
@@ -38,26 +38,29 @@ Main modified files:
   - [backend/routers/train.py](D:/GITHUB/mfgstudio/backend/routers/train.py)
 - `docker compose up --build -d backend frontend`
 
-## Known open issue
+## Recently resolved issue
 
-The main unresolved issue is MLflow run termination for the blend path.
+The MLflow lifecycle issue on the blend path has been addressed.
 
-Observed state:
+Resolved state:
 
-- `stack::Stack Ensemble (2)` becomes `FINISHED`
-- `automl::AutoML Best (...)` becomes `FINISHED`
-- `blend::Blend Ensemble (2)` may remain `RUNNING`
-- an internal `Voting Regressor` run may also remain `RUNNING`
+- new `blend::Blend Ensemble (2)` runs now finish as `FINISHED`
+- internal `Voting Regressor` runs generated during blend are also terminated correctly
+- old stale running blend-related runs were manually cleaned up in MLflow
 
-This means the next session should start by validating and fixing the blend-path MLflow lifecycle.
+What changed:
+
+- backend now closes active local MLflow runs before logging its own run
+- backend terminates recent RUNNING runs created during advanced PyCaret operations
+- backend also terminates same-name stale RUNNING runs for blend/stack internal ensemble artifacts
 
 ## Recommended first steps tomorrow
 
 1. `git status --short`
 2. `docker compose up --build -d backend frontend`
-3. re-run blend through `POST /api/train/ensemble`
-4. verify MLflow run status again
-5. if fixed, update docs and create a normal feature commit
+3. continue with P3 dynamic model-catalog metadata expansion
+4. continue with P5 Analyze / XAI enhancement
+5. after implementation, run normal verification and commit
 
 ## Useful commands
 

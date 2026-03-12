@@ -43,6 +43,57 @@ def close_active_runs(status: str = "FINISHED", limit: int = 10) -> list[str]:
     return closed_run_ids
 
 
+def terminate_recent_running_runs(
+    experiment_id: str,
+    started_after_ms: int,
+    keep_run_ids: set[str] | None = None,
+    max_results: int = 100,
+) -> list[str]:
+    client = get_client()
+    keep_run_ids = keep_run_ids or set()
+    terminated = []
+    runs = client.search_runs(
+        experiment_ids=[str(experiment_id)],
+        max_results=max_results,
+        order_by=["attribute.start_time DESC"],
+    )
+    for run in runs:
+        if run.info.status != "RUNNING":
+            continue
+        if run.info.run_id in keep_run_ids:
+            continue
+        if not run.info.start_time or run.info.start_time < started_after_ms:
+            continue
+        client.set_terminated(run.info.run_id, status="FINISHED")
+        terminated.append(run.info.run_id)
+    return terminated
+
+
+def terminate_running_runs_by_name(
+    experiment_id: str,
+    run_names: set[str],
+    max_results: int = 200,
+) -> list[str]:
+    if not run_names:
+        return []
+    client = get_client()
+    terminated = []
+    runs = client.search_runs(
+        experiment_ids=[str(experiment_id)],
+        max_results=max_results,
+        order_by=["attribute.start_time DESC"],
+    )
+    for run in runs:
+        if run.info.status != "RUNNING":
+            continue
+        current_name = run.data.tags.get("mlflow.runName") or ""
+        if current_name not in run_names:
+            continue
+        client.set_terminated(run.info.run_id, status="FINISHED")
+        terminated.append(run.info.run_id)
+    return terminated
+
+
 def ensure_experiment(experiment_name: str) -> str:
     client = get_client()
     experiment = client.get_experiment_by_name(experiment_name)
