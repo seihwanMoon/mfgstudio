@@ -1,7 +1,7 @@
 # PROGRESS
 
 > Rule: check this file before starting work, mark completed items with `[x]`, and record blockers under `Error Log`.
-> Current status reflects the codebase as of 2026-03-10.
+> Current status reflects the codebase as of 2026-03-12.
 
 ---
 
@@ -263,6 +263,9 @@ All planned tasks are currently complete.
 | 2026-03-12 | Fixed clustering compare by replacing unsupported `compare_models()` with sequential `create_model()` evaluation, repaired clustering analysis plots so `cluster`, `t-SNE`, and `elbow` all return PNG images, and cleared stale compare selections that blocked row selection in the UI | Codex |
 | 2026-03-12 | Repaired prediction path recovery for finalized models, stabilized classification permutation importance, and restored several mojibake Analyze/Setup strings while keeping browser-extension `postMessage` errors documented as non-app noise | Codex |
 | 2026-03-12 | Added time-series-specific setup handling by stripping unsupported tabular `setup()` parameters, auto-detecting datetime index columns, and returning `y_train`-based setup shape so the sample time-series setup path now succeeds with `TransformedTargetForecaster` | Codex |
+| 2026-03-12 | Restored time-series compare by fixing estimator slug/file persistence for names with special characters, then verified `compare_models()` results for `STLF`, `Huber w/ Cond. Deseasonalize & Detrending`, `TBATS`, `ARIMA`, and `BATS` through the live SSE endpoint | Codex |
+| 2026-03-12 | Added time-series-specific tuning by generating safe default `custom_grid` values for forecasting estimators, removed unsupported generic tune options from the PyCaret time-series path, and verified `/api/train/tune/55__STLF/stream` returns `200` with trial and done events | Codex |
+| 2026-03-12 | Replaced time-series HTML-only analysis output with backend-generated PNG plots for `forecast`, `residuals`, `acf`, and `pacf`, normalized `PeriodIndex` handling for matplotlib, and verified all four plot endpoints return live `200` image responses | Codex |
 
 ---
 
@@ -292,12 +295,10 @@ Symptom: The in-app MLflow management screen showed versioned models, but the re
 Cause: The app had local DB-based registry/state handling, while real MLflow run logging and registry registration were not yet wired into the finalize/register flow.
 Resolution: Resolved. Finalize now logs real MLflow runs, register/stage flows sync with real MLflow Registry, and a backfill script seeded the visible `manufacturing_model` versions into MLflow.
 
-### [2026-03-12] Time-series compare path still unstable
-Symptom: `GET /api/train/compare/53/stream` still fails from the browser after time-series `setup()` succeeds, and experiment `53` is recorded as `compare_error`.
-Observed state:
-- `POST /api/train/setup` for the sample time-series dataset now succeeds
-- experiment `53` uses module type `timeseries`
-- `GET /api/train/compare/53/result` currently returns `[]`
-- backend logs show `GET /api/train/compare/53/stream HTTP/1.1" 500 Internal Server Error`
-Likely cause: the compare stream still assumes tabular-style MLflow/model handling for time-series estimators and needs a time-series-specific compare implementation or guard.
-Next step: reproduce the exact exception from `compare_models_real()` for `module_type='timeseries'`, then either implement a proper time-series compare path or restrict unsupported options with a clear `400` response.
+### [2026-03-12] Time-series compare/tune/analyze instability
+Symptom: time-series `compare`, `tune`, and `analyze` flows initially failed across multiple browser runs.
+Cause:
+- compare failed because model artifact slugs did not safely handle estimator names with punctuation or `/`
+- tune failed because `pycaret.time_series.tune_model()` does not accept the generic tabular `search_library` path and requires estimator-specific `custom_grid`
+- analyze failed because PyCaret time-series plots were saved as `.html`, while the app expected PNG images, and matplotlib could not render raw `PeriodIndex` values directly
+Resolution: resolved on 2026-03-12 by sanitizing time-series artifact slugs, adding a time-series-specific tuning branch with default `custom_grid` generation, and replacing HTML plot consumption with backend-generated PNG plots for `forecast`, `residuals`, `acf`, and `pacf`.

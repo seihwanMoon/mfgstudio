@@ -148,19 +148,21 @@ Current result:
 
 ## Execution order for the next session
 
-1. Fix the time-series compare blocker introduced after time-series setup support landed
-2. Re-verify the full time-series workflow end-to-end
-3. Continue Analyze / XAI enhancement
-4. Polish advanced PyCaret candidate UX in Tune / Finalize
-5. Surface classification optimization metadata more clearly
+1. Re-verify the full time-series workflow end-to-end after today's compare/tune/plot fixes
+2. Continue Analyze / XAI enhancement
+3. Polish advanced PyCaret candidate UX in Tune / Finalize
+4. Surface classification optimization metadata more clearly
+5. Decide whether time-series Tune / Analyze screens need forecasting-specific labels and controls
 
 ## Notes
 
 - user-facing app catalog should continue to center on `manufacturing_model`
 - browser `chrome-extension://... postMessage` errors are still treated as extension noise, not app errors
-- time-series support is partially complete:
-  - `setup()` works with automatic datetime-index detection
-  - `compare` for experiment `53` is still failing and is the next required fix
+- time-series support now covers:
+  - `setup()` with automatic datetime-index detection
+  - `compare`
+  - `tune` with forecasting-specific `custom_grid`
+  - `forecast` / `residuals` / `acf` / `pacf` plot rendering
 - before starting new work, re-check:
   - `git status --short`
   - `npm run build`
