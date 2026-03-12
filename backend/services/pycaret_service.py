@@ -1479,7 +1479,12 @@ def get_shap(experiment_id: int, algorithm: str, row_index: int = 0) -> dict:
 def finalize_model_real(experiment_id: int, algorithm: str, model_name: str, metrics: dict | None = None) -> dict:
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
-    final_model = pc.finalize_model(model)
+    if context["module_type"] in {"classification", "regression", "timeseries"}:
+        final_model = pc.finalize_model(model)
+        artifact_source = "finalize_model"
+    else:
+        final_model = model
+        artifact_source = "save_model"
     save_path = build_final_model_base_path(experiment_id, algorithm)
     pc.save_model(final_model, str(save_path))
     context["final_models"][algorithm] = final_model
@@ -1493,7 +1498,7 @@ def finalize_model_real(experiment_id: int, algorithm: str, model_name: str, met
         tags={
             "module_type": context["module_type"],
             "algorithm": algorithm,
-            "artifact_source": "finalize_model",
+            "artifact_source": artifact_source,
             "catalog_model_name": model_name,
         },
         input_example=context.get("input_example"),
