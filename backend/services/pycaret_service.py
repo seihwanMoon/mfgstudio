@@ -16,6 +16,7 @@ from sklearn.decomposition import PCA
 from sklearn.inspection import permutation_importance
 from sklearn.manifold import TSNE
 from sklearn.metrics import accuracy_score
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 from config import settings
 from services.mlflow_service import (
@@ -918,6 +919,172 @@ def _extract_trials(tuner) -> list[dict]:
     return trials
 
 
+def _build_timeseries_custom_grid(model) -> dict:
+    params = model.get_params()
+
+    def _unique(values):
+        unique_values = []
+        for value in values:
+            if value not in unique_values:
+                unique_values.append(value)
+        return unique_values
+
+    candidate_grids: list[dict] = []
+
+    if "forecaster__model__window_length" in params:
+        value = int(params["forecaster__model__window_length"])
+        candidate_grids.append(
+            {
+                "forecaster__model__window_length": _unique(
+                    [max(2, value - 2), value, max(3, value + 2)]
+                )
+            }
+        )
+    if "forecaster__model__regressor__epsilon" in params:
+        value = float(params["forecaster__model__regressor__epsilon"])
+        candidate_grids.append(
+            {
+                "forecaster__model__regressor__epsilon": _unique(
+                    [round(max(0.1, value * 0.75), 4), round(value, 4), round(value * 1.25, 4)]
+                )
+            }
+        )
+    if "forecaster__model__regressor__alpha" in params:
+        value = float(params["forecaster__model__regressor__alpha"])
+        candidate_grids.append(
+            {
+                "forecaster__model__regressor__alpha": _unique(
+                    [round(max(1e-6, value / 10), 6), round(value, 6), round(value * 10, 6)]
+                )
+            }
+        )
+    for boolean_key in (
+        "forecaster__model__robust",
+        "forecaster__model__use_box_cox",
+        "forecaster__model__use_arma_errors",
+        "forecaster__model__use_trend",
+        "forecaster__model__use_damped_trend",
+    ):
+        if boolean_key in params and (
+            isinstance(params[boolean_key], (bool, np.bool_)) or params.get(boolean_key) is None
+        ):
+            current = params.get(boolean_key)
+            candidate_grids.append({boolean_key: _unique([current, True, False])})
+
+    if "forecaster__model__sp" in params:
+        value = params["forecaster__model__sp"]
+        if isinstance(value, list):
+            candidate_grids.append({"forecaster__model__sp": [value]})
+        elif isinstance(value, (int, np.integer)) and int(value) > 1:
+            candidate_grids.append({"forecaster__model__sp": [int(value)]})
+
+    for grid in candidate_grids:
+        values = next(iter(grid.values()))
+        if len(values) >= 1:
+            return grid
+    raise ValueError("시계열 모델에 사용할 수 있는 기본 튜닝 파라미터를 찾지 못했습니다.")
+
+
+def _to_series(data) -> pd.Series:
+    if data is None:
+        return pd.Series(dtype="float64")
+    if isinstance(data, pd.Series):
+        return data.copy()
+    if isinstance(data, pd.DataFrame):
+        if data.empty:
+            return pd.Series(dtype="float64")
+        return data.iloc[:, 0].copy()
+    return pd.Series(data)
+
+
+def _safe_timeseries_lags(series: pd.Series) -> int:
+    n_obs = len(series.dropna())
+    if n_obs < 4:
+        raise ValueError("ACF/PACF plot requires at least 4 observations.")
+    return max(1, min(20, (n_obs // 2) - 1))
+
+
+def _normalize_timeseries_index(index) -> list:
+    if hasattr(index, "to_timestamp"):
+        try:
+            return list(index.to_timestamp())
+        except Exception:
+            return [str(item) for item in index]
+    return [str(item) if "Period" in type(item).__name__ else item for item in index]
+
+
+def _build_timeseries_plot(context: dict, model, plot_type: str, use_train_data: bool = False) -> str:
+    pc = context["pc"]
+    y_train = _to_series(pc.get_config("y_train")).dropna()
+    y_test = _to_series(pc.get_config("y_test")).dropna()
+
+    if plot_type in {"forecast", "residuals"}:
+        forecast_frame = pc.predict_model(model)
+        y_pred = _to_series(forecast_frame).dropna()
+        if not y_test.empty:
+            y_pred = y_pred.reindex(y_test.index)
+
+        if plot_type == "forecast":
+            plt.figure(figsize=(10, 6))
+            if not y_train.empty:
+                plt.plot(
+                    _normalize_timeseries_index(y_train.index),
+                    y_train.values,
+                    label="Train",
+                    color="#0f172a",
+                    linewidth=2,
+                )
+            if not y_test.empty:
+                plt.plot(
+                    _normalize_timeseries_index(y_test.index),
+                    y_test.values,
+                    label="Test",
+                    color="#38bdf8",
+                    linewidth=2,
+                )
+            if not y_pred.empty:
+                plt.plot(
+                    _normalize_timeseries_index(y_pred.index),
+                    y_pred.values,
+                    label="Forecast",
+                    color="#f59e0b",
+                    linewidth=2,
+                    linestyle="--",
+                )
+            plt.title("Forecast vs Actual")
+            plt.xlabel("Time")
+            plt.ylabel(_sanitize_column_name(context["params"].get("target_col", "target")))
+            plt.legend()
+            return _figure_to_base64()
+
+        residuals = (y_test - y_pred).dropna()
+        if residuals.empty:
+            raise ValueError("잔차 플롯을 그릴 수 있는 테스트 예측 결과가 없습니다.")
+        plt.figure(figsize=(10, 5))
+        plt.plot(_normalize_timeseries_index(residuals.index), residuals.values, color="#38bdf8", linewidth=2)
+        plt.axhline(0, color="#94a3b8", linestyle="--", linewidth=1)
+        plt.title("Forecast Residuals")
+        plt.xlabel("Time")
+        plt.ylabel("Residual")
+        return _figure_to_base64()
+
+    plot_series = y_train if use_train_data or y_test.empty else pd.concat([y_train, y_test]).dropna()
+    if plot_series.empty:
+        raise ValueError("시계열 플롯에 사용할 데이터가 없습니다.")
+    lags = _safe_timeseries_lags(plot_series)
+
+    plt.figure(figsize=(10, 5))
+    if plot_type == "acf":
+        plot_acf(plot_series, lags=lags, ax=plt.gca())
+        plt.title("Auto Correlation (ACF)")
+    elif plot_type == "pacf":
+        plot_pacf(plot_series, lags=lags, ax=plt.gca(), method="ywm")
+        plt.title("Partial Auto Correlation (PACF)")
+    else:
+        raise ValueError(f"Unsupported timeseries plot type: {plot_type}")
+    return _figure_to_base64()
+
+
 def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | None = None) -> dict:
     tune_options = tune_options or {}
     context = _activate_experiment(experiment_id)
@@ -938,12 +1105,15 @@ def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | Non
         "estimator": base_model,
         "optimize": tune_options.get("optimize") or _default_sort_key(context["module_type"]),
         "n_iter": int(tune_options.get("n_iter", 10)),
-        "search_library": tune_options.get("search_library", "scikit-learn"),
         "choose_better": bool(tune_options.get("choose_better", True)),
         "return_tuner": True,
         "verbose": False,
         "tuner_verbose": False,
     }
+    if context["module_type"] != "timeseries":
+        tune_kwargs["search_library"] = tune_options.get("search_library", "scikit-learn")
+    else:
+        tune_kwargs["custom_grid"] = tune_options.get("custom_grid") or _build_timeseries_custom_grid(base_model)
     if tune_options.get("early_stopping") is not None:
         tune_kwargs["early_stopping"] = bool(tune_options.get("early_stopping"))
 
@@ -974,6 +1144,7 @@ def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | Non
                 "tune_optimize": tune_kwargs.get("optimize"),
                 "tune_n_iter": tune_kwargs.get("n_iter"),
                 "tune_search_library": tune_kwargs.get("search_library"),
+                "tune_custom_grid": tune_kwargs.get("custom_grid"),
                 "tune_choose_better": tune_kwargs.get("choose_better"),
             },
         ),
@@ -1403,6 +1574,8 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
         return _build_anomaly_embedding_plot(context, model, plot_type)
     if context["module_type"] == "clustering" and plot_type in {"cluster", "tsne"}:
         return _build_clustering_plot(context, model, plot_type)
+    if context["module_type"] == "timeseries" and plot_type in {"forecast", "residuals", "acf", "pacf"}:
+        return _build_timeseries_plot(context, model, plot_type, use_train_data)
 
     plot_attempts = [
         {"plot": plot_type, "save": True, "verbose": False, "use_train_data": use_train_data},
