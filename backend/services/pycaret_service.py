@@ -94,6 +94,11 @@ def _cached_model_path(experiment_id: int, bucket: str, algorithm: str) -> Path:
     return bucket_dir / _slugify_algorithm(algorithm)
 
 
+def build_final_model_base_path(experiment_id: int, algorithm: str) -> Path:
+    base_name = f"experiment_{experiment_id}_{_slugify_algorithm(algorithm)}"
+    return Path(settings.model_dir) / base_name
+
+
 def _normalize_dataframe_columns(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, str]]:
     mapping = {}
     used = set()
@@ -1172,7 +1177,7 @@ def finalize_model_real(experiment_id: int, algorithm: str, model_name: str, met
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
     final_model = pc.finalize_model(model)
-    save_path = Path(settings.model_dir) / model_name
+    save_path = build_final_model_base_path(experiment_id, algorithm)
     pc.save_model(final_model, str(save_path))
     context["final_models"][algorithm] = final_model
     context.setdefault("persisted_models", {}).setdefault("final", {})[algorithm] = str(save_path) + ".pkl"

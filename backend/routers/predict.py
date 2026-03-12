@@ -14,7 +14,7 @@ from models.experiment import Experiment
 from models.prediction import Prediction
 from models.trained_model import TrainedModel
 from services.model_catalog_service import STAGE_PRIORITY, get_catalog_entries
-from services.pycaret_service import predict_batch_rows, predict_payload
+from services.pycaret_service import build_final_model_base_path, predict_batch_rows, predict_payload
 
 router = APIRouter()
 
@@ -71,6 +71,47 @@ def _build_schema(db: Session, model: TrainedModel) -> dict:
         "target_col": experiment.target_col,
         "columns": columns,
     }
+
+
+def _resolve_existing_model_path(model: TrainedModel, experiment: Experiment | None) -> str | None:
+    candidates: list[Path] = []
+
+    if model.model_path:
+        candidates.append(Path(model.model_path))
+
+    if experiment:
+        candidates.append(build_final_model_base_path(experiment.id, model.algorithm).with_suffix(".pkl"))
+        legacy_name = f"{experiment.name}_{model.algorithm.lower().replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
+        candidates.append(Path(settings.model_dir) / legacy_name)
+
+    algorithm_suffix = f"_{model.algorithm.lower().replace(' ', '_').replace('(', '').replace(')', '')}.pkl"
+    model_dir = Path(settings.model_dir)
+    if model_dir.exists():
+        for path in model_dir.glob(f"*{algorithm_suffix}"):
+            candidates.append(path)
+
+    seen = set()
+    for candidate in candidates:
+        normalized = str(candidate)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        if candidate.exists():
+            return normalized
+
+    return None
+
+
+def _ensure_predict_model_path(db: Session, model: TrainedModel, experiment: Experiment | None) -> str:
+    resolved_path = _resolve_existing_model_path(model, experiment)
+    if not resolved_path:
+        raise HTTPException(status_code=500, detail="예측용 모델 파일을 찾을 수 없습니다.")
+
+    if model.model_path != resolved_path:
+        model.model_path = resolved_path
+        db.commit()
+
+    return resolved_path
 
 
 def _get_predict_model(db: Session, model_name: str) -> TrainedModel:
@@ -138,7 +179,8 @@ def predict_single(model_name: str, payload: SinglePredictRequest, db: Session =
     if not experiment:
         raise HTTPException(status_code=404, detail="Experiment not found")
 
-    result = predict_payload(model.model_path, experiment.module_type, payload.input_data, payload.threshold)
+    model_path = _ensure_predict_model_path(db, model, experiment)
+    result = predict_payload(model_path, experiment.module_type, payload.input_data, payload.threshold)
 
     db.add(
         Prediction(
@@ -168,6 +210,7 @@ async def predict_batch(
     experiment = db.query(Experiment).filter(Experiment.id == model.experiment_id).first()
     if not experiment:
         raise HTTPException(status_code=404, detail="Experiment not found")
+    model_path = _ensure_predict_model_path(db, model, experiment)
 
     tmp_path = Path(settings.upload_dir) / f"batch_{file.filename}"
     with tmp_path.open("wb") as target:
@@ -178,7 +221,7 @@ async def predict_batch(
     finally:
         tmp_path.unlink(missing_ok=True)
 
-    results = predict_batch_rows(model.model_path, experiment.module_type, df.to_dict("records"), threshold)
+    results = predict_batch_rows(model_path, experiment.module_type, df.to_dict("records"), threshold)
     db.add(
         Prediction(
             model_id=model.id,
