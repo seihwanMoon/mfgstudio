@@ -14,6 +14,7 @@ import pandas as pd
 import shap
 from sklearn.inspection import permutation_importance
 from sklearn.manifold import TSNE
+from sklearn.metrics import accuracy_score
 
 from config import settings
 from services.mlflow_service import (
@@ -1290,7 +1291,9 @@ def get_interpret_plot(
     _apply_korean_font_preferences()
     supervised = context["module_type"] in {"classification", "regression"}
     features_key = "X_train_transformed" if use_train_data or not supervised else "X_test_transformed"
+    original_features_key = "X_train" if use_train_data or not supervised else "X_test"
     target_key = "y_train" if use_train_data or not supervised else "y_test"
+    transformed_target_key = "y_train_transformed" if use_train_data or not supervised else "y_test_transformed"
     features = pc.get_config(features_key)
 
     if features is None or len(features) == 0:
@@ -1360,14 +1363,40 @@ def get_interpret_plot(
     if plot_type == "pfi":
         if not supervised:
             raise ValueError("Permutation importance is only supported for classification and regression experiments")
-        target = pc.get_config(target_key)
-        scores = permutation_importance(model, features, np.ravel(target), n_repeats=5, random_state=42, n_jobs=1)
-        ranked = (
-            pd.Series(scores.importances_mean, index=features.columns)
-            .sort_values(ascending=False)
-            .head(12)
-            .sort_values(ascending=True)
-        )
+        if context["module_type"] == "classification":
+            source_features = pc.get_config(original_features_key)
+            target = pc.get_config(target_key)
+            if source_features is None or target is None or len(source_features) == 0:
+                raise ValueError("Permutation importance를 계산할 분류 데이터가 없습니다.")
+
+            label_col = "prediction_label"
+            baseline_predictions = pc.predict_model(model, data=source_features.copy())
+            baseline_score = accuracy_score(target, baseline_predictions[label_col])
+            importances = []
+            for column in source_features.columns:
+                deltas = []
+                for repeat in range(3):
+                    permuted = source_features.copy()
+                    permuted[column] = permuted[column].sample(frac=1, random_state=42 + repeat).to_numpy()
+                    permuted_predictions = pc.predict_model(model, data=permuted)
+                    score = accuracy_score(target, permuted_predictions[label_col])
+                    deltas.append(baseline_score - score)
+                importances.append(float(np.mean(deltas)))
+            ranked = (
+                pd.Series(importances, index=source_features.columns)
+                .sort_values(ascending=False)
+                .head(12)
+                .sort_values(ascending=True)
+            )
+        else:
+            target = pc.get_config(target_key)
+            scores = permutation_importance(model, features, np.ravel(target), n_repeats=5, random_state=42, n_jobs=1)
+            ranked = (
+                pd.Series(scores.importances_mean, index=features.columns)
+                .sort_values(ascending=False)
+                .head(12)
+                .sort_values(ascending=True)
+            )
         plt.figure(figsize=(10, 6))
         plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#22c55e")
         plt.title("Permutation Feature Importance")
