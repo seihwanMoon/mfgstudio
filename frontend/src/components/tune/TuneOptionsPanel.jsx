@@ -9,6 +9,8 @@ export default function TuneOptionsPanel({
   activeAlgorithm = "",
   onSelectAlgorithm,
   moduleType = "classification",
+  isTuneSupported = true,
+  supportMessage = "",
 }) {
   return (
     <div
@@ -45,18 +47,34 @@ export default function TuneOptionsPanel({
         />
       ) : null}
       <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>선택 모델: {selectedCount}개</div>
+      {!isTuneSupported ? (
+        <div
+          style={{
+            border: "1px solid rgba(245, 158, 11, 0.3)",
+            borderLeft: "4px solid var(--warning)",
+            borderRadius: 10,
+            background: "rgba(245, 158, 11, 0.08)",
+            color: "var(--text-primary)",
+            padding: 12,
+            fontSize: 12,
+            lineHeight: 1.6,
+          }}
+        >
+          {supportMessage}
+        </div>
+      ) : null}
       <button
         onClick={onStart}
-        disabled={!selectedCount || isRunning}
+        disabled={!selectedCount || isRunning || !isTuneSupported}
         style={{
           marginTop: "auto",
           border: "none",
           borderRadius: 10,
-          background: "var(--accent-blue)",
-          color: "var(--accent-contrast)",
+          background: !selectedCount || isRunning || !isTuneSupported ? "var(--bg-surface-soft)" : "var(--accent-blue)",
+          color: !selectedCount || isRunning || !isTuneSupported ? "var(--text-muted)" : "var(--accent-contrast)",
           padding: "12px 14px",
           fontWeight: 800,
-          cursor: "pointer",
+          cursor: !selectedCount || isRunning || !isTuneSupported ? "not-allowed" : "pointer",
         }}
       >
         {isRunning ? "튜닝 진행 중..." : "튜닝 시작"}

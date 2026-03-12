@@ -10,6 +10,11 @@ import TuneOptionsPanel from "../components/tune/TuneOptionsPanel"
 import { useSSETune } from "../hooks/useSSETune"
 import useStore, { COMPARE_SORT_OPTIONS, getDefaultCompareSort } from "../store/useStore"
 
+const UNSUPPORTED_TUNE_MODULES = {
+  anomaly: "이상탐지 모듈은 PyCaret에서 tune_model()을 지원하지 않습니다. 비교 결과와 분석 단계로 진행해 최종 후보를 확정하세요.",
+  clustering: "클러스터링 모듈은 PyCaret에서 tune_model()을 지원하지 않습니다. 비교 결과와 분석 단계로 진행해 최종 후보를 확정하세요.",
+}
+
 export default function TunePage() {
   const navigate = useNavigate()
   const {
@@ -28,6 +33,9 @@ export default function TunePage() {
   )
   const isBinaryClassification = moduleType === "classification" && Number(targetMeta?.unique_count || 0) === 2
   const metricOptions = COMPARE_SORT_OPTIONS[moduleType] || COMPARE_SORT_OPTIONS.classification
+  const isTuneSupported = !Object.hasOwn(UNSUPPORTED_TUNE_MODULES, moduleType)
+  const tuneSupportMessage = UNSUPPORTED_TUNE_MODULES[moduleType] || ""
+
   const [isRunning, setIsRunning] = useState(false)
   const [isAdvancedRunning, setIsAdvancedRunning] = useState(false)
   const [error, setError] = useState("")
@@ -71,6 +79,10 @@ export default function TunePage() {
       navigate("/compare")
       return
     }
+    if (!isTuneSupported) {
+      setError(tuneSupportMessage)
+      return
+    }
 
     setError("")
     setIsRunning(true)
@@ -88,7 +100,7 @@ export default function TunePage() {
         },
         () => {
           setIsRunning(false)
-          setError("실시간 스트림 처리 중 오류가 발생했습니다.")
+          setError("튜닝 스트림 처리 중 오류가 발생했습니다.")
         }
       )
     } catch (tuneError) {
@@ -165,6 +177,8 @@ export default function TunePage() {
         activeAlgorithm={activeAlgorithm}
         onSelectAlgorithm={setActiveAlgorithm}
         moduleType={moduleType}
+        isTuneSupported={isTuneSupported}
+        supportMessage={tuneSupportMessage}
       />
       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         {error ? (
@@ -200,12 +214,12 @@ export default function TunePage() {
         >
           <div style={{ color: "var(--text-primary)", fontWeight: 800 }}>PyCaret 고급 단계</div>
           <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6 }}>
-            비교 결과 상위 모델을 기준으로 `blend_models()`, `stack_models()`, `automl()` 후보를 추가 생성합니다.
-            생성된 후보는 즉시 비교 결과 목록에 반영되고, 이후 <strong>모델 확정</strong> 화면에서 선택할 수 있습니다.
+            비교 결과 상위 모델을 기준으로 <code>blend_models()</code>, <code>stack_models()</code>, <code>automl()</code> 후보를
+            추가 생성합니다. 생성된 후보는 즉시 비교 결과 목록에 반영되고, 이후 <strong>모델 확정</strong> 화면에서 선택할 수 있습니다.
             {moduleType === "classification" ? (
               <>
                 <br />
-                분류 실험에서는 `calibrate_model()`과 `optimize_threshold()`도 추가로 실행할 수 있습니다.
+                분류 실험에서는 <code>calibrate_model()</code>과 <code>optimize_threshold()</code>도 추가로 실행할 수 있습니다.
               </>
             ) : null}
           </div>
@@ -252,7 +266,7 @@ export default function TunePage() {
           {advancedError ? <div style={{ color: "var(--danger)", fontSize: 13 }}>{advancedError}</div> : null}
           {moduleType === "classification" && !isBinaryClassification ? (
             <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
-              `optimize_threshold()`는 이진 분류에서만 사용할 수 있습니다. 현재 타깃 클래스 수를 확인해보세요.
+              <code>optimize_threshold()</code>는 이진 분류에서만 사용할 수 있습니다. 현재 타깃 클래스 수를 확인해보세요.
             </div>
           ) : null}
           {advancedResult ? (
@@ -276,14 +290,14 @@ export default function TunePage() {
                 {advancedResult.optimize ? ` / 기준 지표: ${advancedResult.optimize}` : ""}
               </div>
               <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
-                주요 지표:{" "}
+                주요 지표{" "}
                 {Object.entries(advancedResult.after_metrics || {})
                   .slice(0, 4)
                   .map(([key, value]) => `${key}=${value}`)
                   .join(" / ")}
               </div>
               <div style={{ color: "var(--accent-blue)", fontSize: 12 }}>
-                후보 목록이 갱신됐습니다. 모델 확정 단계에서 바로 선택할 수 있습니다.
+                후보 목록을 갱신했습니다. 모델 확정 단계에서 바로 선택할 수 있습니다.
               </div>
             </div>
           ) : null}

@@ -342,6 +342,10 @@ async def tune_stream(job_id: str, db: Session = Depends(get_db)):
         )
         summary = tune_model_real(experiment_id, algorithm, tune_options)
         trials = summary.get("trials", [])
+    except ValueError as exc:
+        experiment.status = "tune_unsupported"
+        db.commit()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         experiment.status = "tune_error"
         db.commit()
