@@ -1,4 +1,4 @@
-function optionKey(option) {
+﻿function optionKey(option) {
   return `${option.family}:${option.key}`
 }
 

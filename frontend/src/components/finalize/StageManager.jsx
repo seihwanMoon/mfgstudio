@@ -1,4 +1,4 @@
-export default function StageManager({ modelName, versions = [], onChangeStage, onRollback }) {
+﻿export default function StageManager({ modelName, versions = [], onChangeStage, onRollback }) {
   return (
     <div
       style={{
@@ -18,7 +18,8 @@ export default function StageManager({ modelName, versions = [], onChangeStage, 
           <div key={version.version} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ color: "var(--text-primary)" }}>
-                v{version.version} <span style={{ color: "var(--text-secondary)", marginLeft: 8 }}>{version.stage}</span>
+                v{version.version}
+                <span style={{ color: "var(--text-secondary)", marginLeft: 8 }}>{version.stage}</span>
               </div>
               {version.stage !== "Production" ? (
                 <button onClick={() => onRollback(version.version)} style={miniButton}>

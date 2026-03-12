@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+﻿import { useEffect, useMemo, useState } from "react"
 
 import { registryAPI, trainAPI } from "../api"
 import MLflowRegisterForm from "../components/finalize/MLflowRegisterForm"

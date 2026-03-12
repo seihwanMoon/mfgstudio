@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 from io import BytesIO
 import json
 from pathlib import Path
@@ -1194,6 +1194,39 @@ def get_interpret_plot(
         plt.xlabel("Mean |SHAP value|")
         return _figure_to_base64()
 
+    if plot_type == "dependence":
+        if context["module_type"] == "classification":
+            explainer = shap.Explainer(model.predict_proba, features)
+            explanation = explainer(features)
+            values = explanation.values
+            if values.ndim == 3:
+                shap_matrix = np.mean(values, axis=2)
+            else:
+                shap_matrix = values
+        elif context["module_type"] == "regression":
+            explainer = shap.Explainer(model.predict, features)
+            explanation = explainer(features)
+            shap_matrix = explanation.values
+        else:
+            raise ValueError(f"Unsupported XAI dependence module: {context['module_type']}")
+
+        importance = np.mean(np.abs(shap_matrix), axis=0)
+        feature_index = int(np.argmax(importance))
+        feature_name = features.columns[feature_index]
+        x_values = pd.to_numeric(features.iloc[:, feature_index], errors="coerce")
+        y_values = pd.to_numeric(pd.Series(shap_matrix[:, feature_index]), errors="coerce")
+        plot_frame = pd.DataFrame({"x": x_values, "y": y_values}).dropna()
+        if plot_frame.empty:
+            raise ValueError("Dependence plot could not be generated because the selected feature is not numeric")
+
+        plt.figure(figsize=(10, 6))
+        plt.scatter(plot_frame["x"], plot_frame["y"], alpha=0.75, color="#38bdf8", edgecolors="white", linewidths=0.5)
+        plt.axhline(0, color="#94a3b8", linestyle="--", linewidth=1)
+        plt.title(f"SHAP Dependence: {_sanitize_column_name(feature_name)}")
+        plt.xlabel(_sanitize_column_name(feature_name))
+        plt.ylabel("SHAP value")
+        return _figure_to_base64()
+
     if plot_type == "pfi":
         if not supervised:
             raise ValueError("Permutation importance is only supported for classification and regression experiments")
@@ -1234,7 +1267,7 @@ def list_plot_options(module_type: str) -> dict:
         "clustering": [
             {"key": "cluster", "label": "클러스터 분포", "family": "plot"},
             {"key": "tsne", "label": "t-SNE", "family": "plot"},
-            {"key": "elbow", "label": "엘보우", "family": "plot"},
+            {"key": "elbow", "label": "엘보", "family": "plot"},
         ],
         "anomaly": [
             {"key": "tsne", "label": "t-SNE", "family": "plot"},
@@ -1250,10 +1283,12 @@ def list_plot_options(module_type: str) -> dict:
     xai_plots = {
         "classification": [
             {"key": "summary", "label": "SHAP 요약", "family": "xai"},
+            {"key": "dependence", "label": "SHAP 의존도", "family": "xai"},
             {"key": "pfi", "label": "Permutation 중요도", "family": "xai"},
         ],
         "regression": [
             {"key": "summary", "label": "SHAP 요약", "family": "xai"},
+            {"key": "dependence", "label": "SHAP 의존도", "family": "xai"},
             {"key": "pfi", "label": "Permutation 중요도", "family": "xai"},
         ],
     }
@@ -1387,3 +1422,4 @@ def predict_batch_rows(model_path: str, module_type: str, rows: list[dict], thre
             item["score"] = round(float(item[score_col]), 4)
         payload.append(item)
     return payload
+

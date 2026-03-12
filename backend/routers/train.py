@@ -266,15 +266,23 @@ def get_compare_result(experiment_id: int, db: Session = Depends(get_db)):
         .order_by(TrainedModel.id.asc())
         .all()
     )
-    return [
-        {
-            "id": model.id,
-            "algorithm": model.algorithm,
-            "metrics": json.loads(model.metrics or "{}"),
-            "mlflow_run_id": model.mlflow_run_id,
-        }
-        for model in models
-    ]
+    payload = []
+    for model in models:
+        hyperparams = json.loads(model.hyperparams or "{}")
+        payload.append(
+            {
+                "id": model.id,
+                "algorithm": model.algorithm,
+                "metrics": json.loads(model.metrics or "{}"),
+                "hyperparams": hyperparams,
+                "mlflow_run_id": model.mlflow_run_id,
+                "is_tuned": bool(model.is_tuned),
+                "operation": hyperparams.get("operation"),
+                "members": hyperparams.get("members", []),
+                "resolved_model_name": hyperparams.get("resolved_model_name"),
+            }
+        )
+    return payload
 
 
 @router.get("/models")

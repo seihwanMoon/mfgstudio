@@ -1,4 +1,4 @@
-export default function VersionTimeline({ versions = [] }) {
+﻿export default function VersionTimeline({ versions = [] }) {
   return (
     <div style={{ border: "1px solid #1A3352", borderRadius: 14, background: "#0D1926", padding: 16 }}>
       <div style={{ color: "#E2EEFF", fontWeight: 700, marginBottom: 10 }}>버전 히스토리</div>

@@ -257,6 +257,7 @@ All planned tasks are currently complete.
 | 2026-03-12 | Extended Analyze/XAI with separate diagnostic and XAI plot catalogs, cleaned analyze-screen copy/components, added backend-generated `summary` and `pfi` XAI images without new runtime dependency conflicts, and re-verified both XAI plot types through the live API | Codex |
 | 2026-03-12 | Fixed analyze plot fallback for estimators without native feature importance, stabilized backend runtime by removing dev auto-reload in Docker, repaired multiple mojibake frontend screens, and stopped registry version lookups from firing on partial input values | Codex |
 | 2026-03-12 | Added classification-specific PyCaret optimizations with `calibrate_model()` and binary-only `optimize_threshold()`, exposed them in the Tune screen, and verified both the multiclass guard (`400`) and binary threshold optimization success through live API smoke tests | Codex |
+| 2026-03-12 | Added backend-generated `SHAP dependence` XAI plots, localized remaining Compare/Finalize/Analyze strings, surfaced candidate metadata (`operation`, `members`, `resolved_model_name`) in compare/finalize cards, and re-verified `POST /api/analyze/plot` for `plot_family=xai`, `plot_type=dependence` with a live `200` image response | Codex |
 
 ---
 

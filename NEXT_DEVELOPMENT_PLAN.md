@@ -95,12 +95,17 @@ Current result:
   - XAI options
 - analyze screen now supports XAI plot rendering for:
   - `summary`
+  - `dependence`
   - `pfi`
 - analyze page copy and selectors were cleaned up during the same pass
+- compare/finalize views now surface richer candidate metadata:
+  - `operation`
+  - `members`
+  - `resolved_model_name`
 
 Remaining:
 
-- add richer XAI variants beyond `summary` / `pfi`
+- add richer XAI variants beyond `summary` / `dependence` / `pfi`
 - review whether `pdp` or fairness-related views should be added without destabilizing runtime dependencies
 
 ### P6. Classification-Specific Optimization
@@ -128,7 +133,7 @@ Current result:
 Remaining:
 
 - decide whether optimized threshold values themselves should be surfaced in the UI
-- consider carrying calibrated / threshold-optimized metadata into Finalize cards more explicitly
+- consider surfacing calibration / threshold method details more explicitly in the UI
 
 ### P7. MLflow Ops View Refinement
 

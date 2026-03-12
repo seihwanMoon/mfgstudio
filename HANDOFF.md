@@ -20,8 +20,11 @@ Implemented locally:
 - dynamic PyCaret model-catalog metadata and compare-screen family/scope filters
 - analyze-screen cleanup with separate diagnostic and XAI plot groups
 - backend XAI plot rendering for `summary` and `pfi`
+- backend XAI plot rendering for `dependence`
 - analyze `feature` plot fallback to `Permutation importance` for models without native importance attributes
 - backend Docker runtime changed from `--reload` to stable non-reload mode
+- compare/finalize cards now surface generated candidate metadata (`operation`, `members`, `resolved_model_name`)
+- remaining mojibake strings cleaned up in compare/finalize/analyze support components
 
 ## Current local state
 

@@ -17,12 +17,13 @@ export default function ShapWaterfall({ result, moduleType }) {
       >
         아직 SHAP 결과가 없습니다.
         <br />
-        오른쪽 아래에서 행 번호를 입력하고 분석을 실행하세요.
+        오른쪽 아래에서 행 번호를 입력하고 분석을 실행해보세요.
       </div>
     )
   }
 
   const scoreLabel = moduleType === "regression" ? "예측값" : "예측 확률"
+  const maxAbs = Math.max(...(result.shap_values || []).map((item) => Math.abs(item.shap_value)), 1)
 
   return (
     <div
@@ -35,27 +36,26 @@ export default function ShapWaterfall({ result, moduleType }) {
       }}
     >
       <div style={{ color: "var(--text-primary)", fontWeight: 800, marginBottom: 6 }}>예측 결과: {result.prediction}</div>
-      <div style={{ color: "var(--accent-blue-strong)", fontWeight: 700, marginBottom: 14 }}>
+      <div style={{ color: "var(--accent-blue-strong)", fontWeight: 700, marginBottom: 6 }}>
         {scoreLabel}: {result.score}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {(result.shap_values || []).map((item) => (
-          <div
-            key={item.feature}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 12,
-              borderTop: "1px solid var(--border)",
-              paddingTop: 8,
-            }}
-          >
-            <span style={{ color: "var(--text-secondary)", fontSize: 12 }}>{item.feature}</span>
-            <span style={{ color: item.direction === "positive" ? "var(--danger)" : "var(--accent-blue)", fontWeight: 700 }}>
-              {item.shap_value}
-            </span>
-          </div>
-        ))}
+      <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 14 }}>행 번호: {result.row_index}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {(result.shap_values || []).map((item) => {
+          const width = `${Math.max(6, (Math.abs(item.shap_value) / maxAbs) * 100)}%`
+          const color = item.direction === "positive" ? "var(--danger)" : "var(--accent-blue)"
+          return (
+            <div key={item.feature} style={{ display: "grid", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ color: "var(--text-secondary)", fontSize: 12 }}>{item.feature}</span>
+                <span style={{ color, fontWeight: 700 }}>{item.shap_value}</span>
+              </div>
+              <div style={{ height: 8, borderRadius: 999, background: "var(--bg-surface-soft)", overflow: "hidden" }}>
+                <div style={{ width, height: "100%", background: color, borderRadius: 999 }} />
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
