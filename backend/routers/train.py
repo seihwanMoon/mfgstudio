@@ -13,10 +13,12 @@ from models.trained_model import TrainedModel
 from services.pycaret_service import (
     automl_best_real,
     blend_models_real,
+    calibrate_model_real,
     compare_models_real,
     ensure_experiment_context,
     finalize_model_real,
     list_available_models,
+    optimize_threshold_real,
     run_setup,
     stack_models_real,
     tune_model_real,
@@ -52,6 +54,13 @@ class EnsembleRequest(BaseModel):
 
 class AutoMLRequest(BaseModel):
     experiment_id: int
+    options: dict = {}
+
+
+class ClassificationOptimizeRequest(BaseModel):
+    experiment_id: int
+    algorithm: str
+    method: str
     options: dict = {}
 
 
@@ -474,4 +483,49 @@ def create_automl_candidate(req: AutoMLRequest, db: Session = Depends(get_db)):
         "resolved_model_name": summary.get("resolved_model_name"),
         "after_metrics": summary["after_metrics"],
         "run_id": summary["run_id"],
+    }
+
+
+@router.post("/classification-optimize")
+def create_classification_optimization_candidate(req: ClassificationOptimizeRequest, db: Session = Depends(get_db)):
+    experiment = db.query(Experiment).filter(Experiment.id == req.experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    dataset = db.query(Dataset).filter(Dataset.id == experiment.dataset_id).first()
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    params = json.loads(experiment.setup_params or "{}")
+
+    try:
+        ensure_experiment_context(
+            experiment_id=experiment.id,
+            dataset_path=dataset.stored_path,
+            module_type=experiment.module_type,
+            params=params,
+            experiment_name=experiment.name,
+        )
+        if req.method == "calibrate":
+            summary = calibrate_model_real(experiment.id, req.algorithm, req.options)
+        elif req.method == "threshold":
+            summary = optimize_threshold_real(experiment.id, req.algorithm, req.options)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported classification optimization method")
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{req.method} failed: {exc}") from exc
+
+    model = _upsert_generated_candidate(db, experiment, summary)
+    return {
+        "model_id": model.id,
+        "algorithm": summary["algorithm"],
+        "operation": summary["operation"],
+        "members": summary.get("members", []),
+        "after_metrics": summary["after_metrics"],
+        "run_id": summary["run_id"],
+        "method": summary.get("method"),
+        "optimize": summary.get("optimize"),
     }

@@ -19,8 +19,14 @@ export default function TunePage() {
     tuneResult,
     setupParams,
     setCompareResults,
+    uploadedDataset,
   } = useStore()
   const moduleType = setupParams.module_type || "classification"
+  const targetMeta = useMemo(
+    () => (uploadedDataset?.columns || []).find((column) => (column.name ?? column) === setupParams.target_col),
+    [setupParams.target_col, uploadedDataset]
+  )
+  const isBinaryClassification = moduleType === "classification" && Number(targetMeta?.unique_count || 0) === 2
   const metricOptions = COMPARE_SORT_OPTIONS[moduleType] || COMPARE_SORT_OPTIONS.classification
   const [isRunning, setIsRunning] = useState(false)
   const [isAdvancedRunning, setIsAdvancedRunning] = useState(false)
@@ -32,6 +38,7 @@ export default function TunePage() {
     optimize: getDefaultCompareSort(moduleType),
     search_library: "scikit-learn",
     n_iter: 20,
+    calibration_method: "sigmoid",
   })
   const { startTune } = useSSETune()
 
@@ -46,6 +53,7 @@ export default function TunePage() {
       ...prev,
       optimize: metricOptions.includes(prev.optimize) ? prev.optimize : getDefaultCompareSort(moduleType),
       search_library: "scikit-learn",
+      calibration_method: prev.calibration_method || "sigmoid",
     }))
   }, [metricOptions, moduleType])
 
@@ -80,7 +88,7 @@ export default function TunePage() {
         },
         () => {
           setIsRunning(false)
-          setError("튜닝 스트림 처리 중 오류가 발생했습니다.")
+          setError("실시간 스트림 처리 중 오류가 발생했습니다.")
         }
       )
     } catch (tuneError) {
@@ -109,9 +117,27 @@ export default function TunePage() {
             choose_better: true,
           },
         })
-      } else {
+      } else if (kind === "automl") {
         response = await trainAPI.createAutoML({
           experiment_id: currentExperimentId,
+          options: {
+            optimize: tuneOptions.optimize,
+          },
+        })
+      } else if (kind === "calibrate") {
+        response = await trainAPI.createClassificationOptimization({
+          experiment_id: currentExperimentId,
+          algorithm: activeAlgorithm,
+          method: "calibrate",
+          options: {
+            method: tuneOptions.calibration_method,
+          },
+        })
+      } else if (kind === "threshold") {
+        response = await trainAPI.createClassificationOptimization({
+          experiment_id: currentExperimentId,
+          algorithm: activeAlgorithm,
+          method: "threshold",
           options: {
             optimize: tuneOptions.optimize,
           },
@@ -138,6 +164,7 @@ export default function TunePage() {
         selectedAlgorithms={selectedModelsForTune}
         activeAlgorithm={activeAlgorithm}
         onSelectAlgorithm={setActiveAlgorithm}
+        moduleType={moduleType}
       />
       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         {error ? (
@@ -173,8 +200,14 @@ export default function TunePage() {
         >
           <div style={{ color: "var(--text-primary)", fontWeight: 800 }}>PyCaret 고급 단계</div>
           <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6 }}>
-            비교 결과 상위 모델을 기반으로 `blend_models()`, `stack_models()`, `automl()` 후보를 추가 생성합니다.
-            생성된 후보는 즉시 비교 결과 목록에 반영되며, 이후 <strong>모델 확정</strong> 화면에서 선택할 수 있습니다.
+            비교 결과 상위 모델을 기준으로 `blend_models()`, `stack_models()`, `automl()` 후보를 추가 생성합니다.
+            생성된 후보는 즉시 비교 결과 목록에 반영되고, 이후 <strong>모델 확정</strong> 화면에서 선택할 수 있습니다.
+            {moduleType === "classification" ? (
+              <>
+                <br />
+                분류 실험에서는 `calibrate_model()`과 `optimize_threshold()`도 추가로 실행할 수 있습니다.
+              </>
+            ) : null}
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
@@ -194,11 +227,34 @@ export default function TunePage() {
             <button onClick={() => handleAdvancedAction("automl")} disabled={isAdvancedRunning} style={advancedButtonStyle}>
               AutoML Best
             </button>
+            {moduleType === "classification" ? (
+              <button
+                onClick={() => handleAdvancedAction("calibrate")}
+                disabled={!activeAlgorithm || isAdvancedRunning}
+                style={advancedButtonStyle}
+              >
+                Calibrate Model
+              </button>
+            ) : null}
+            {moduleType === "classification" ? (
+              <button
+                onClick={() => handleAdvancedAction("threshold")}
+                disabled={!activeAlgorithm || isAdvancedRunning || !isBinaryClassification}
+                style={advancedButtonStyle}
+              >
+                Optimize Threshold
+              </button>
+            ) : null}
             <button onClick={() => navigate("/finalize")} style={secondaryButtonStyle}>
               모델 확정으로 이동
             </button>
           </div>
           {advancedError ? <div style={{ color: "var(--danger)", fontSize: 13 }}>{advancedError}</div> : null}
+          {moduleType === "classification" && !isBinaryClassification ? (
+            <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
+              `optimize_threshold()`는 이진 분류에서만 사용할 수 있습니다. 현재 타깃 클래스 수를 확인해보세요.
+            </div>
+          ) : null}
           {advancedResult ? (
             <div
               style={{
@@ -216,16 +272,18 @@ export default function TunePage() {
                 생성 방식: {advancedResult.operation}
                 {advancedResult.members?.length ? ` / 구성 모델: ${advancedResult.members.join(", ")}` : ""}
                 {advancedResult.resolved_model_name ? ` / 선택 모델: ${advancedResult.resolved_model_name}` : ""}
+                {advancedResult.method ? ` / 방식: ${advancedResult.method}` : ""}
+                {advancedResult.optimize ? ` / 기준 지표: ${advancedResult.optimize}` : ""}
               </div>
               <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
-                주요 지표{" "}
+                주요 지표:{" "}
                 {Object.entries(advancedResult.after_metrics || {})
                   .slice(0, 4)
                   .map(([key, value]) => `${key}=${value}`)
                   .join(" / ")}
               </div>
               <div style={{ color: "var(--accent-blue)", fontSize: 12 }}>
-                후보 목록이 갱신되었습니다. 모델 확정 단계에서 바로 선택할 수 있습니다.
+                후보 목록이 갱신됐습니다. 모델 확정 단계에서 바로 선택할 수 있습니다.
               </div>
             </div>
           ) : null}

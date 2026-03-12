@@ -19,6 +19,7 @@ export const trainAPI = {
   startTune: (payload) => api.post("/api/train/tune", payload),
   createEnsemble: (payload) => api.post("/api/train/ensemble", payload),
   createAutoML: (payload) => api.post("/api/train/automl", payload),
+  createClassificationOptimization: (payload) => api.post("/api/train/classification-optimize", payload),
   finalize: (modelId) => api.post(`/api/train/finalize/${modelId}`),
 }
 

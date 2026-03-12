@@ -11,6 +11,8 @@ Implemented locally:
 - backend support for `blend_models()`
 - backend support for `stack_models()`
 - backend support for `automl()`
+- backend support for `calibrate_model()`
+- backend support for binary-only `optimize_threshold()`
 - candidate insertion back into compare-result rows
 - Tune page controls for advanced PyCaret actions
 - Finalize page selection support for generated candidates
@@ -18,6 +20,8 @@ Implemented locally:
 - dynamic PyCaret model-catalog metadata and compare-screen family/scope filters
 - analyze-screen cleanup with separate diagnostic and XAI plot groups
 - backend XAI plot rendering for `summary` and `pfi`
+- analyze `feature` plot fallback to `Permutation importance` for models without native importance attributes
+- backend Docker runtime changed from `--reload` to stable non-reload mode
 
 ## Current local state
 
@@ -62,8 +66,9 @@ What changed:
 1. `git status --short`
 2. `docker compose up --build -d backend frontend`
 3. continue with richer XAI variants beyond `summary` / `pfi`
-4. review classification-specific optimization hooks
-5. after implementation, run normal verification and commit
+4. polish advanced candidate UX in Tune / Finalize for calibration / threshold candidates
+5. decide whether threshold values and calibration metadata should be surfaced in the UI
+6. after implementation, run normal verification and commit
 
 ## Useful commands
 

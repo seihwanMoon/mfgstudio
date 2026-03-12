@@ -15,6 +15,7 @@ export default function FinalizePage() {
   const [selectedId, setSelectedId] = useState("")
   const [finalizeResult, setFinalizeResult] = useState(null)
   const [registryName, setRegistryName] = useState("manufacturing_model")
+  const [registryDraft, setRegistryDraft] = useState("manufacturing_model")
   const [versions, setVersions] = useState([])
 
   useEffect(() => {
@@ -36,12 +37,23 @@ export default function FinalizePage() {
   )
 
   async function refreshVersions(name) {
+    const normalized = String(name || "").trim()
+    if (!normalized) {
+      setVersions([])
+      return
+    }
     try {
-      const response = await registryAPI.listVersions(name)
+      const response = await registryAPI.listVersions(normalized)
       setVersions(response)
     } catch {
       setVersions([])
     }
+  }
+
+  function commitRegistryName() {
+    const normalized = String(registryDraft || "").trim()
+    if (!normalized || normalized === registryName) return
+    setRegistryName(normalized)
   }
 
   async function handleFinalize() {
@@ -51,9 +63,13 @@ export default function FinalizePage() {
   }
 
   async function handleRegister() {
-    if (!finalizeResult?.run_id) return
-    const response = await registryAPI.register({ run_id: finalizeResult.run_id, model_name: registryName })
-    await refreshVersions(registryName)
+    const normalized = String(registryDraft || "").trim()
+    if (!finalizeResult?.run_id || !normalized) return
+    if (normalized !== registryName) {
+      setRegistryName(normalized)
+    }
+    const response = await registryAPI.register({ run_id: finalizeResult.run_id, model_name: normalized })
+    await refreshVersions(normalized)
     return response
   }
 
@@ -129,7 +145,12 @@ export default function FinalizePage() {
         <PipelineSummary steps={pipelineSteps} />
       </div>
       <div style={{ padding: 18, borderLeft: "1px solid #1A3352", display: "flex", flexDirection: "column", gap: 14 }}>
-        <MLflowRegisterForm value={registryName} onChange={setRegistryName} onRegister={handleRegister} />
+        <MLflowRegisterForm
+          value={registryDraft}
+          onChange={setRegistryDraft}
+          onCommit={commitRegistryName}
+          onRegister={handleRegister}
+        />
         <StageManager modelName={registryName} versions={versions} onChangeStage={handleStage} onRollback={handleRollback} />
         <VersionTimeline versions={versions} />
       </div>

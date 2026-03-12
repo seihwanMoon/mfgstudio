@@ -1,4 +1,4 @@
-export default function MLflowRegisterForm({ value, onChange, onRegister }) {
+export default function MLflowRegisterForm({ value, onChange, onRegister, onCommit }) {
   return (
     <div
       style={{
@@ -16,6 +16,13 @@ export default function MLflowRegisterForm({ value, onChange, onRegister }) {
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={() => onCommit?.()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault()
+            onCommit?.()
+          }
+        }}
         style={{
           width: "100%",
           borderRadius: 12,

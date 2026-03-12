@@ -6,6 +6,7 @@ import re
 import time
 
 import matplotlib
+from matplotlib import font_manager
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -21,8 +22,21 @@ from services.mlflow_service import (
 )
 
 matplotlib.use("Agg")
-plt.rcParams["font.family"] = ["Malgun Gothic", "NanumGothic", "AppleGothic", "DejaVu Sans"]
-plt.rcParams["axes.unicode_minus"] = False
+
+
+def _apply_korean_font_preferences() -> None:
+    preferred_fonts = ["NanumGothic", "Malgun Gothic", "AppleGothic", "DejaVu Sans", "Liberation Sans"]
+    available = {font.name for font in font_manager.fontManager.ttflist}
+    resolved = [name for name in preferred_fonts if name in available] or ["DejaVu Sans"]
+    matplotlib.rcParams["font.family"] = "sans-serif"
+    matplotlib.rcParams["font.sans-serif"] = resolved
+    matplotlib.rcParams["axes.unicode_minus"] = False
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = resolved
+    plt.rcParams["axes.unicode_minus"] = False
+
+
+_apply_korean_font_preferences()
 
 
 MODULE_LIBRARY = {
@@ -543,6 +557,29 @@ def _require_supervised_module(context: dict) -> None:
         raise ValueError("blend/stack/automl is only supported for classification and regression experiments")
 
 
+def _require_classification_module(context: dict) -> None:
+    if context["module_type"] != "classification":
+        raise ValueError("This optimization is only supported for classification experiments")
+
+
+def _require_binary_classification(context: dict) -> None:
+    _require_classification_module(context)
+    pc = context["pc"]
+    y_train = pc.get_config("y_train")
+    y_test = pc.get_config("y_test")
+    values = []
+    for target in (y_train, y_test):
+        if target is None:
+            continue
+        if hasattr(target, "tolist"):
+            values.extend(target.tolist())
+        else:
+            values.extend(list(target))
+    unique_count = len(pd.Series(values).dropna().unique()) if values else 0
+    if unique_count != 2:
+        raise ValueError("optimize_threshold() is only available for binary classification experiments")
+
+
 def _log_generated_candidate(context: dict, *, algorithm: str, run_prefix: str, model, metrics: dict, extra_params: dict, extra_tags: dict) -> dict:
     run_info = log_sklearn_model_run(
         experiment_name=context["experiment_name"],
@@ -954,6 +991,99 @@ def automl_best_real(experiment_id: int, options: dict | None = None) -> dict:
     }
 
 
+def calibrate_model_real(experiment_id: int, algorithm: str, options: dict | None = None) -> dict:
+    options = options or {}
+    context = _activate_experiment(experiment_id)
+    _require_classification_module(context)
+
+    pc = context["pc"]
+    base_model = _get_candidate_model(context, algorithm)
+    calibrated_model = pc.calibrate_model(
+        base_model,
+        method=options.get("method", "sigmoid"),
+        calibrate_fold=options.get("calibrate_fold", 5),
+        fold=options.get("fold"),
+        verbose=False,
+    )
+    after_frame = pc.pull().copy()
+    algorithm_label = f"Calibrated ({algorithm})"
+    context["trained_models"][algorithm_label] = calibrated_model
+    _cache_model_artifact(context, "trained", algorithm_label, calibrated_model)
+    metrics = _extract_summary_metrics(after_frame)
+    run_info = _log_generated_candidate(
+        context,
+        algorithm=algorithm_label,
+        run_prefix="calibrate",
+        model=calibrated_model,
+        metrics=metrics,
+        extra_params={
+            "calibration_base_algorithm": algorithm,
+            "calibration_method": options.get("method", "sigmoid"),
+            "calibration_fold": options.get("calibrate_fold", 5),
+        },
+        extra_tags={
+            "artifact_source": "calibrate_model",
+            "base_algorithm": algorithm,
+        },
+    )
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
+    return {
+        "operation": "calibrate",
+        "algorithm": algorithm_label,
+        "members": [algorithm],
+        "after_metrics": metrics,
+        "run_id": run_info["run_id"],
+        "mlflow_experiment_id": run_info["experiment_id"],
+        "method": options.get("method", "sigmoid"),
+    }
+
+
+def optimize_threshold_real(experiment_id: int, algorithm: str, options: dict | None = None) -> dict:
+    options = options or {}
+    context = _activate_experiment(experiment_id)
+    _require_binary_classification(context)
+
+    pc = context["pc"]
+    base_model = _get_candidate_model(context, algorithm)
+    optimized_model = pc.optimize_threshold(
+        base_model,
+        optimize=options.get("optimize") or _default_sort_key(context["module_type"]),
+        verbose=False,
+    )
+    after_frame = pc.pull().copy()
+    algorithm_label = f"Threshold Optimized ({algorithm})"
+    context["trained_models"][algorithm_label] = optimized_model
+    _cache_model_artifact(context, "trained", algorithm_label, optimized_model)
+    metrics = _extract_summary_metrics(after_frame)
+    run_info = _log_generated_candidate(
+        context,
+        algorithm=algorithm_label,
+        run_prefix="threshold",
+        model=optimized_model,
+        metrics=metrics,
+        extra_params={
+            "threshold_base_algorithm": algorithm,
+            "threshold_optimize": options.get("optimize") or _default_sort_key(context["module_type"]),
+        },
+        extra_tags={
+            "artifact_source": "optimize_threshold",
+            "base_algorithm": algorithm,
+        },
+    )
+    _save_experiment_snapshot(context)
+    _persist_context_metadata(context)
+    return {
+        "operation": "threshold",
+        "algorithm": algorithm_label,
+        "members": [algorithm],
+        "after_metrics": metrics,
+        "run_id": run_info["run_id"],
+        "mlflow_experiment_id": run_info["experiment_id"],
+        "optimize": options.get("optimize") or _default_sort_key(context["module_type"]),
+    }
+
+
 def _get_active_model(experiment_id: int, algorithm: str):
     context = _activate_experiment(experiment_id)
     pc = context["pc"]
@@ -985,6 +1115,7 @@ def _read_latest_png() -> str:
 
 
 def _figure_to_base64() -> str:
+    _apply_korean_font_preferences()
     buffer = BytesIO()
     plt.tight_layout()
     plt.savefig(buffer, format="png", bbox_inches="tight")
@@ -997,6 +1128,7 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
 
+    _apply_korean_font_preferences()
     _clear_generated_plot_files()
 
     plot_kwargs = {
@@ -1005,9 +1137,14 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
         "verbose": False,
     }
     try:
-        pc.plot_model(model, use_train_data=use_train_data, **plot_kwargs)
-    except TypeError:
-        pc.plot_model(model, **plot_kwargs)
+        try:
+            pc.plot_model(model, use_train_data=use_train_data, **plot_kwargs)
+        except TypeError:
+            pc.plot_model(model, **plot_kwargs)
+    except Exception:
+        if plot_type == "feature" and context["module_type"] in {"classification", "regression"}:
+            return get_interpret_plot(experiment_id, algorithm, "pfi", use_train_data)
+        raise
     return _read_latest_png()
 
 
@@ -1020,6 +1157,7 @@ def get_interpret_plot(
 ) -> str:
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
+    _apply_korean_font_preferences()
     supervised = context["module_type"] in {"classification", "regression"}
     features_key = "X_train_transformed" if use_train_data or not supervised else "X_test_transformed"
     target_key = "y_train" if use_train_data or not supervised else "y_test"

@@ -91,7 +91,17 @@ export default function SetupPage() {
         <BasicSettingsForm params={setupParams} columns={uploadedDataset?.columns || []} onChange={setSetupParam} />
         <PreprocessingForm params={setupParams} onChange={setSetupParam} />
         {notice ? (
-          <div style={{ border: "1px solid rgba(22, 119, 255, 0.28)", borderLeft: "4px solid var(--accent-blue)", borderRadius: 12, background: "var(--accent-blue-soft)", padding: 14, color: "var(--text-primary)", fontSize: 13 }}>
+          <div
+            style={{
+              border: "1px solid rgba(22, 119, 255, 0.28)",
+              borderLeft: "4px solid var(--accent-blue)",
+              borderRadius: 12,
+              background: "var(--accent-blue-soft)",
+              padding: 14,
+              color: "var(--text-primary)",
+              fontSize: 13,
+            }}
+          >
             {notice}
           </div>
         ) : null}
@@ -123,10 +133,10 @@ export default function SetupPage() {
 function formatSetupError(message) {
   if (!message) return "setup() 실행 중 알 수 없는 오류가 발생했습니다."
   if (message.includes("least populated class")) {
-    return "현재 타깃은 분류보다 회귀에 가까운 연속형 수치입니다. 모듈을 '회귀'로 바꿔 다시 실행하세요."
+    return "현재 타깃은 분류보다 회귀에 가까운 연속형 수치입니다. 모듈을 '회귀'로 바꿔 다시 실행해보세요."
   }
   if (message.includes("Column ?? not found")) {
-    return "한글 컬럼명을 포함한 타깃 컬럼 처리 중 오류가 발생했습니다. 최신 화면으로 새로고침 후 다시 시도하세요."
+    return "한글 컬럼명을 포함한 타깃 컬럼 처리 중 오류가 발생했습니다. 화면을 새로고침한 뒤 다시 시도해보세요."
   }
   return message
 }

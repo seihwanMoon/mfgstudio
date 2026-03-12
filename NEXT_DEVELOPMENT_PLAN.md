@@ -105,12 +105,30 @@ Remaining:
 
 ### P6. Classification-Specific Optimization
 
-Status: Planned
+Status: In Progress
 
 Scope:
 
 - `calibrate_model()`
 - `optimize_threshold()`
+
+Current result:
+
+- backend functions added for:
+  - `calibrate_model()`
+  - `optimize_threshold()`
+- new API added:
+  - `POST /api/train/classification-optimize`
+- Tune screen now exposes classification-only advanced actions for:
+  - `Calibrate Model`
+  - `Optimize Threshold`
+- threshold optimization is now guarded so it only runs for binary classification datasets
+- multiclass requests return a clear `400` message instead of a generic `500`
+
+Remaining:
+
+- decide whether optimized threshold values themselves should be surfaced in the UI
+- consider carrying calibrated / threshold-optimized metadata into Finalize cards more explicitly
 
 ### P7. MLflow Ops View Refinement
 
@@ -125,9 +143,9 @@ Current result:
 
 ## Execution order for the next session
 
-1. Move to Analyze / XAI enhancement
-2. Add classification-specific optimization
-3. Polish advanced PyCaret candidate UX
+1. Continue Analyze / XAI enhancement
+2. Polish advanced PyCaret candidate UX in Tune / Finalize
+3. Surface classification optimization metadata more clearly
 
 ## Notes
 

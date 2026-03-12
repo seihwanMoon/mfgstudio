@@ -8,6 +8,7 @@ export default function TuneOptionsPanel({
   selectedAlgorithms = [],
   activeAlgorithm = "",
   onSelectAlgorithm,
+  moduleType = "classification",
 }) {
   return (
     <div
@@ -35,6 +36,14 @@ export default function TuneOptionsPanel({
         onChange={(value) => onChange("n_iter", Number(value))}
         options={["10", "20", "30"]}
       />
+      {moduleType === "classification" ? (
+        <Select
+          label="보정 방식"
+          value={options.calibration_method || "sigmoid"}
+          onChange={(value) => onChange("calibration_method", value)}
+          options={["sigmoid", "isotonic"]}
+        />
+      ) : null}
       <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>선택 모델: {selectedCount}개</div>
       <button
         onClick={onStart}
