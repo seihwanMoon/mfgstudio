@@ -13,10 +13,13 @@ function getOptionKey(option) {
   return `${option.family}:${option.key}`
 }
 
+const SHAP_SUPPORTED_MODULES = new Set(["classification", "regression"])
+
 export default function AnalyzePage() {
   const navigate = useNavigate()
   const { currentExperimentId, selectedModelsForTune, setupParams } = useStore()
   const moduleType = setupParams.module_type || "classification"
+  const isShapSupported = SHAP_SUPPORTED_MODULES.has(moduleType)
 
   const [models, setModels] = useState([])
   const [modelId, setModelId] = useState(null)
@@ -83,6 +86,11 @@ export default function AnalyzePage() {
 
   async function handleShap() {
     if (!modelId) return
+    if (!isShapSupported) {
+      setShapResult(null)
+      setShapError("SHAP 분석은 분류와 회귀 모듈에서만 지원합니다.")
+      return
+    }
 
     setShapError("")
     try {
@@ -184,7 +192,17 @@ export default function AnalyzePage() {
           </div>
         ) : null}
 
-        <ShapIndexSelector value={rowIndex} onChange={setRowIndex} onAnalyze={handleShap} />
+        <ShapIndexSelector
+          value={rowIndex}
+          onChange={setRowIndex}
+          onAnalyze={handleShap}
+          disabled={!isShapSupported}
+          helperText={
+            isShapSupported
+              ? "테스트 데이터의 몇 번째 행을 설명할지 입력합니다. 예: `0`은 첫 번째 샘플입니다."
+              : "이 모듈은 SHAP 설명을 지원하지 않습니다. 왼쪽의 모델 플롯으로 이상치 분포와 구조를 확인하세요."
+          }
+        />
 
         <button
           onClick={() => navigate("/finalize")}

@@ -56,6 +56,8 @@ def get_plot_view(payload: PlotRequest, db: Session = Depends(get_db)):
             if payload.plot_family == "xai"
             else get_plot(experiment.id, model.algorithm, payload.plot_type, payload.use_train_data)
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"analyze plot failed: {exc}") from exc
 
@@ -86,7 +88,10 @@ def interpret_model(payload: InterpretRequest, db: Session = Depends(get_db)):
         params=params,
         experiment_name=experiment.name,
     )
-    result = get_shap(experiment.id, model.algorithm, payload.row_index)
+    try:
+        result = get_shap(experiment.id, model.algorithm, payload.row_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"model_id": model.id, **result}
 
 

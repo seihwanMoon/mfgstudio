@@ -1,4 +1,5 @@
 ﻿import base64
+import importlib.util
 from io import BytesIO
 import json
 from pathlib import Path
@@ -12,6 +13,7 @@ import numpy as np
 import pandas as pd
 import shap
 from sklearn.inspection import permutation_importance
+from sklearn.manifold import TSNE
 
 from config import settings
 from services.mlflow_service import (
@@ -1193,6 +1195,54 @@ def _figure_to_base64() -> str:
     return base64.b64encode(buffer.read()).decode("utf-8")
 
 
+def _has_umap() -> bool:
+    return importlib.util.find_spec("umap") is not None
+
+
+def _build_anomaly_embedding_plot(context: dict, model, plot_type: str) -> str:
+    pc = context["pc"]
+    features = pc.get_config("X_train_transformed")
+    if features is None or len(features) == 0:
+        raise ValueError("No anomaly data is available for visualization.")
+
+    if plot_type == "tsne":
+        if len(features) < 2:
+            raise ValueError("t-SNE plot requires at least 2 samples.")
+        perplexity = max(1, min(30, len(features) - 1))
+        reducer = TSNE(n_components=2, perplexity=perplexity, init="random", learning_rate="auto", random_state=42)
+    elif plot_type == "umap":
+        if not _has_umap():
+            raise ValueError("UMAP plot is unavailable because umap-learn is not installed in the current runtime.")
+        import umap
+        reducer = umap.UMAP(n_components=2, random_state=42)
+    else:
+        raise ValueError(f"Unsupported anomaly plot type: {plot_type}")
+
+    coords = reducer.fit_transform(features)
+    assigned = pc.assign_model(model)
+    label_series = assigned["Anomaly"].astype(str) if "Anomaly" in assigned.columns else pd.Series(["data"] * len(features))
+    plot_frame = pd.DataFrame({"x": coords[:, 0], "y": coords[:, 1], "label": label_series.reset_index(drop=True)})
+
+    plt.figure(figsize=(9, 6))
+    color_map = {"0": "#38bdf8", "1": "#ef4444", "False": "#38bdf8", "True": "#ef4444", "data": "#38bdf8"}
+    for label, group in plot_frame.groupby("label"):
+        plt.scatter(
+            group["x"],
+            group["y"],
+            label=f"Anomaly={label}",
+            alpha=0.8,
+            s=42,
+            color=color_map.get(str(label), "#94a3b8"),
+            edgecolors="white",
+            linewidths=0.5,
+        )
+    plt.title(f"Anomaly {plot_type.upper()} Projection")
+    plt.xlabel("Component 1")
+    plt.ylabel("Component 2")
+    plt.legend()
+    return _figure_to_base64()
+
+
 def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data: bool = False) -> str:
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
@@ -1200,16 +1250,27 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
     _apply_korean_font_preferences()
     _clear_generated_plot_files()
 
-    plot_kwargs = {
-        "plot": plot_type,
-        "save": True,
-        "verbose": False,
-    }
+    if context["module_type"] == "anomaly" and plot_type in {"tsne", "umap"}:
+        return _build_anomaly_embedding_plot(context, model, plot_type)
+
+    plot_attempts = [
+        {"plot": plot_type, "save": True, "verbose": False, "use_train_data": use_train_data},
+        {"plot": plot_type, "save": True, "use_train_data": use_train_data},
+        {"plot": plot_type, "save": True, "verbose": False},
+        {"plot": plot_type, "save": True},
+    ]
+    last_error = None
     try:
-        try:
-            pc.plot_model(model, use_train_data=use_train_data, **plot_kwargs)
-        except TypeError:
-            pc.plot_model(model, **plot_kwargs)
+        for kwargs in plot_attempts:
+            try:
+                pc.plot_model(model, **kwargs)
+                last_error = None
+                break
+            except TypeError as exc:
+                last_error = exc
+                continue
+        if last_error is not None:
+            raise last_error
     except Exception:
         if plot_type == "feature" and context["module_type"] in {"classification", "regression"}:
             return get_interpret_plot(experiment_id, algorithm, "pfi", use_train_data)
@@ -1340,7 +1401,7 @@ def list_plot_options(module_type: str) -> dict:
         ],
         "anomaly": [
             {"key": "tsne", "label": "t-SNE", "family": "plot"},
-            {"key": "umap", "label": "UMAP", "family": "plot"},
+            *([{"key": "umap", "label": "UMAP", "family": "plot"}] if _has_umap() else []),
         ],
         "timeseries": [
             {"key": "forecast", "label": "예측 추세", "family": "plot"},
@@ -1395,7 +1456,7 @@ def get_shap(experiment_id: int, algorithm: str, row_index: int = 0) -> dict:
         prediction = round(float(model.predict(sample)[0]), 4)
         score = prediction
     else:
-        raise ValueError(f"SHAP is not implemented for module type: {context['module_type']}")
+        raise ValueError("SHAP 분석은 분류와 회귀 모듈에서만 지원합니다.")
 
     values = []
     for feature_name, shap_value in zip(features.columns.tolist(), shap_values):
