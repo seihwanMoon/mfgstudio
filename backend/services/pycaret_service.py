@@ -722,6 +722,61 @@ def compare_models_real(experiment_id: int, options: dict | None = None) -> list
         _persist_context_metadata(context)
         return rows
 
+    if context["module_type"] == "clustering":
+        candidate_ids = include_ids or [item["id"] for item in list_available_models("clustering")]
+        if exclude_ids:
+            candidate_ids = [model_id for model_id in candidate_ids if model_id not in set(exclude_ids)]
+        candidate_ids = candidate_ids[: int(options.get("n_select", 3))]
+
+        rows = []
+        for rank, model_id in enumerate(candidate_ids, start=1):
+            started_at = time.time()
+            model = pc.create_model(model_id, verbose=False)
+            result_frame = pc.pull().copy()
+            algorithm = context.get("id_to_name", {}).get(model_id, _humanize_estimator_name(type(model).__name__))
+            metrics = _extract_summary_metrics(result_frame)
+
+            context["trained_models"][algorithm] = model
+            _cache_model_artifact(context, "trained", algorithm, model)
+            run_info = log_sklearn_model_run(
+                experiment_name=context["experiment_name"],
+                run_name=f"compare::{algorithm}",
+                model=model,
+                metrics=metrics,
+                params=_build_mlflow_params(
+                    context.get("params"),
+                    {
+                        "compare_n_select": len(candidate_ids),
+                        "compare_strategy": "sequential_create_model",
+                    },
+                ),
+                tags={
+                    "module_type": context["module_type"],
+                    "algorithm": algorithm,
+                    "artifact_source": "compare_models",
+                    "selection_rank": rank,
+                },
+                input_example=context.get("input_example"),
+            )
+            context["run_ids"][algorithm] = run_info["run_id"]
+            context["mlflow_experiment_id"] = run_info["experiment_id"]
+            rows.append(
+                {
+                    "rank": rank,
+                    "algorithm": algorithm,
+                    "metrics": metrics,
+                    "tt_sec": round(time.time() - started_at, 2),
+                    "mlflow_run_id": run_info["run_id"],
+                    "is_logged": True,
+                    "total_done": rank,
+                    "total_models": len(candidate_ids),
+                }
+            )
+
+        _save_experiment_snapshot(context)
+        _persist_context_metadata(context)
+        return rows
+
     compared = pc.compare_models(**compare_kwargs)
     results_df = pc.pull().copy()
     selected_models = compared if isinstance(compared, list) else [compared]
