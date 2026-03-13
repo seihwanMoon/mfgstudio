@@ -101,7 +101,7 @@ export default function PredictPage() {
       >
         <h3 style={{ margin: 0, color: "var(--text-primary)" }}>예측 설정</h3>
         <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
-          `finalize`와 `레지스트리 등록`이 끝난 모델만 예측 대상으로 표시합니다.
+          `finalize`와 `레지스트리 등록`을 마친 모델만 예측 대상으로 표시됩니다.
           <br />
           `Production` 스테이지 모델이 항상 최우선입니다.
         </div>

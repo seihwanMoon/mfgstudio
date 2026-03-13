@@ -55,7 +55,7 @@ export default function CompareOptionsPanel({
           lineHeight: 1.6,
         }}
       >
-        비교 대상: <strong style={{ color: "var(--text-primary)" }}>{filteredModelCount}</strong> / {totalModelCount}
+        비교 대상 <strong style={{ color: "var(--text-primary)" }}>{filteredModelCount}</strong> / {totalModelCount}
         <br />
         현재 필터에 맞는 PyCaret 모델만 `compare_models()`에 포함됩니다.
       </div>

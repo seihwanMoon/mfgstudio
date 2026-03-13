@@ -83,6 +83,7 @@ Current state:
 - Tune, Finalize, MLflow, and several dashboard/detail panels were also re-localized to Korean
 - compare leaderboard, MLflow registry/schedule panels, and the PDF report template were also normalized to Korean
 - Finalize stage management, registry registration, MLflow logs, and report labels were re-normalized after additional mojibake cleanup
+- Home, Compare, Setup module selection, and Predict high-traffic surfaces were also re-normalized to Korean
 - mixed-language and mojibake strings may still exist in lower-traffic or not-yet-revisited components
 
 Next work:

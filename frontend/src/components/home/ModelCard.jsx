@@ -1,6 +1,13 @@
 import DriftGauge from "../charts/DriftGauge"
 import Badge from "../ui/Badge"
 
+const STAGE_LABELS = {
+  None: "미지정",
+  Staging: "스테이징",
+  Production: "프로덕션",
+  Archived: "보관",
+}
+
 export default function ModelCard({ model, selected, onSelect }) {
   const score = model.metrics?.Accuracy ?? model.metrics?.accuracy ?? model.metrics?.R2 ?? model.metrics?.r2 ?? "-"
 
@@ -23,8 +30,8 @@ export default function ModelCard({ model, selected, onSelect }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-            <Badge color="#34D399">{model.stage || "미지정"}</Badge>
-            <Badge color="#4A9DFF">{model.algorithm || "알 수 없음"}</Badge>
+            <Badge color="#34D399">{STAGE_LABELS[model.stage] || model.stage || "미지정"}</Badge>
+            <Badge color="#4A9DFF">{model.algorithm || "알고리즘 없음"}</Badge>
           </div>
           <div style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 800 }}>{model.mlflow_model_name || "등록 전 모델"}</div>
         </div>

@@ -13,7 +13,7 @@ export default function PredictResultCard({ result, moduleType }) {
       <div style={{ color: "var(--accent-blue-strong)", fontSize: 28, fontWeight: 800, marginBottom: 10 }}>{result.label}</div>
       {moduleType === "classification" ? (
         <>
-          <div style={{ color: "var(--text-secondary)" }}>신뢰도: {result.score ?? "-"}</div>
+          <div style={{ color: "var(--text-secondary)" }}>확률값: {result.score ?? "-"}</div>
           <div style={{ color: "var(--text-secondary)" }}>임계값: {result.threshold}</div>
         </>
       ) : (

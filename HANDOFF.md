@@ -31,6 +31,7 @@ Latest completed work:
 - Finalize / Registry / MLflow log panels were re-normalized to Korean after additional mojibake cleanup
 - Finalize now exposes a direct report-open link after Production stage changes and rollback-triggered report refreshes
 - report service labels and the PDF template were normalized to Korean so generated PDFs match the product UI again
+- Home dashboard, compare leaderboard/options, setup module selector, and predict inputs/results/history were also re-normalized to Korean
 
 ## Current working tree
 
