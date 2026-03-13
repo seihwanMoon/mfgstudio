@@ -2,7 +2,7 @@ export default function DataPreviewTable({ preview }) {
   if (!preview?.rows?.length) {
     return (
       <div style={{ border: "1px dashed var(--border-strong)", borderRadius: 14, minHeight: 280, display: "grid", placeItems: "center", color: "var(--text-secondary)", background: "var(--bg-surface)" }}>
-        업로드 후 상위 50행 미리보기가 여기에 표시됩니다.
+        업로드한 상위 50행 미리보기가 여기에 표시됩니다.
       </div>
     )
   }

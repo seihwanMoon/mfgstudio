@@ -32,6 +32,7 @@ Latest completed work:
 - Finalize now exposes a direct report-open link after Production stage changes and rollback-triggered report refreshes
 - report service labels and the PDF template were normalized to Korean so generated PDFs match the product UI again
 - Home dashboard, compare leaderboard/options, setup module selector, and predict inputs/results/history were also re-normalized to Korean
+- Setup basic/preprocessing forms and upload preview/quality/type tables were also normalized to Korean
 
 ## Current working tree
 

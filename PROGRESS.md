@@ -35,6 +35,7 @@ All planned tasks are currently complete.
 - 2026-03-13: cleaned remaining mojibake across Finalize, Registry, and MLflow log panels, and added a direct report-open link after Production stage changes or rollback.
 - 2026-03-13: normalized report-service labels and the PDF template to Korean so generated reports match the app UI again.
 - 2026-03-13: cleaned remaining high-traffic mojibake across Home, Compare, Setup module selection, and Predict screens without changing the underlying flows.
+- 2026-03-13: normalized setup basic/preprocessing forms and upload preview/quality/type tables to Korean for consistent data onboarding copy.
 - 2026-03-13: fixed XAI `summary`, `dependence`, and individual SHAP failures caused by SHAP/raw-pipeline schema mismatches.
 - 2026-03-13: split the old Analyze flow into dedicated `Plots` and `XAI` workspaces.
 - 2026-03-13: cleaned several mojibake-heavy navigation and XAI panel labels.
