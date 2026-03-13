@@ -11,6 +11,7 @@ from matplotlib import font_manager
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import shap
 from sklearn.decomposition import PCA
 from sklearn.inspection import permutation_importance
@@ -1062,6 +1063,39 @@ def _plotly_figure_payload(fig) -> dict:
     }
 
 
+def _build_timeseries_residual_plot(context: dict, model) -> dict:
+    pc = context["pc"]
+    y_test = _to_series(pc.get_config("y_test")).dropna()
+    forecast_frame = pc.predict_model(model)
+    y_pred = _to_series(forecast_frame).dropna()
+    if not y_test.empty:
+        y_pred = y_pred.reindex(y_test.index)
+    residuals = (y_test - y_pred).dropna()
+
+    if residuals.empty:
+        residuals = (forecast_frame.dropna() - forecast_frame.dropna()).head(1)
+
+    x_values = _normalize_timeseries_index(residuals.index)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x_values,
+            y=residuals.values,
+            mode="lines+markers",
+            name="Residual",
+            line=dict(color="#f59e0b", width=3),
+            marker=dict(size=8),
+        )
+    )
+    fig.add_hline(y=0, line_dash="dash", line_color="#94a3b8")
+    fig.update_layout(
+        title="Forecast Residuals",
+        xaxis_title="Time",
+        yaxis_title="Residual",
+    )
+    return _plotly_figure_payload(fig)
+
+
 def _normalize_timeseries_index(index) -> list:
     if hasattr(index, "to_timestamp"):
         try:
@@ -1148,6 +1182,9 @@ def _build_timeseries_plot(context: dict, model, plot_type: str, use_train_data:
     y_train = _to_series(pc.get_config("y_train")).dropna()
     y_test = _to_series(pc.get_config("y_test")).dropna()
     data_kwargs = {"plot_data_type": "original"}
+
+    if plot_type == "residuals":
+        return _build_timeseries_residual_plot(context, model)
 
     if plot_type == "forecast":
         if use_train_data:
