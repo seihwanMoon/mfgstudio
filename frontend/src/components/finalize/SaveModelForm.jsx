@@ -1,4 +1,11 @@
-export default function SaveModelForm({ modelPath, reportUrl, reportError, reportGenerated }) {
+export default function SaveModelForm({
+  modelPath,
+  reportUrl,
+  reportError,
+  reportGenerated,
+  mlflowSynced,
+  mlflowError,
+}) {
   return (
     <div style={{ border: "1px solid #1A3352", borderRadius: 14, background: "#0D1926", padding: 16 }}>
       <div style={{ color: "#E2EEFF", fontWeight: 700, marginBottom: 8 }}>저장된 모델</div>
@@ -19,6 +26,13 @@ export default function SaveModelForm({ modelPath, reportUrl, reportError, repor
       ) : (
         <div style={{ color: "#8BA8C8", fontSize: 12 }}>아직 사용할 수 있는 보고서가 없습니다.</div>
       )}
+
+      {mlflowSynced === false ? (
+        <div style={{ color: "#FBBF24", fontSize: 12, marginTop: 10, lineHeight: 1.5 }}>
+          MLflow 동기화 없이 앱 기준으로 처리했습니다.
+          {mlflowError ? ` ${mlflowError}` : ""}
+        </div>
+      ) : null}
 
       {reportError ? <div style={{ color: "#FCA5A5", fontSize: 12, marginTop: 10 }}>보고서 경고: {reportError}</div> : null}
     </div>

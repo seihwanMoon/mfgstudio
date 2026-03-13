@@ -19,6 +19,7 @@ All planned tasks are currently complete.
 
 ## Recent Updates
 
+- 2026-03-13: exposed `mlflow_synced` fallback status and clearer Korean copy on the Finalize / registry-stage flow so local-only execution can explain when app metadata fallback was used.
 - 2026-03-13: hardened MLflow integration so `finalize`, registry registration, and Production stage changes degrade to local fallback metadata instead of failing when the configured tracking host is unreachable.
 - 2026-03-13: completed a real in-session smoke test for `finalize -> register -> Production`, verifying automatic report generation and Production report refresh for a newly finalized regression model (`model_id=679`).
 - 2026-03-13: report generation now embeds representative analysis artifacts in the PDF by reusing PyCaret/app plots when an image payload is available.

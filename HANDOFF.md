@@ -37,6 +37,7 @@ Latest completed work:
 - XAI plots now include explicit `native_reason` / `fallback_reason` metadata, and experiment activation now falls back to setup rebuild if saved PyCaret experiment pickle restore fails
 - PDF reports now embed representative analysis artifacts when a report-safe image payload is available, starting with module-appropriate plots such as residual diagnostics and SHAP summary charts
 - MLflow-dependent finalize/registry flows now fall back to local metadata quickly when the configured tracking host is unreachable, instead of blocking or failing the product flow
+- Finalize now shows when MLflow sync fell back to app-managed metadata, and the registry/stage UI copy was re-normalized to Korean while surfacing the refreshed report link
 
 ## Current working tree
 

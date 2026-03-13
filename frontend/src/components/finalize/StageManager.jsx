@@ -29,7 +29,7 @@ export default function StageManager({ modelName, versions = [], onChangeStage, 
       <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, marginBottom: 8 }}>
         같은 모델명 아래에서 버전별 스테이지를 관리합니다.
       </div>
-      <div style={{ color: "var(--text-secondary)", fontSize: 12, marginBottom: 12 }}>모델명 {modelName || "-"}</div>
+      <div style={{ color: "var(--text-secondary)", fontSize: 12, marginBottom: 12 }}>모델명: {modelName || "-"}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {versions.map((version) => (
           <div key={version.version} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>

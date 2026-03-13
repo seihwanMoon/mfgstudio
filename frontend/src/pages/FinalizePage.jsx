@@ -16,14 +16,24 @@ const STAGE_LABELS = {
   None: "미지정",
 }
 
+function buildMlflowStatus(response, successText) {
+  if (!response) return ""
+  if (response.mlflow_synced === false) {
+    const detail = response.mlflow_error ? ` (${response.mlflow_error})` : ""
+    return `${successText} MLflow 서버와는 동기화하지 못해 앱 기준 메타데이터로 처리했습니다.${detail}`
+  }
+  return successText
+}
+
 function buildRegistryMessage(response, fallbackText) {
+  const base = buildMlflowStatus(response, fallbackText)
   if (response?.report_error) {
-    return `보고서 갱신 경고: ${response.report_error}`
+    return `${base} 보고서 갱신 경고: ${response.report_error}`
   }
   if (response?.report_generated) {
-    return "프로덕션 보고서를 다시 생성했습니다."
+    return `${base} 프로덕션 보고서를 다시 생성했습니다.`
   }
-  return fallbackText
+  return base
 }
 
 export default function FinalizePage() {
@@ -85,6 +95,7 @@ export default function FinalizePage() {
     const response = await trainAPI.finalize(selected.id)
     setFinalizeResult(response)
     setRegistryReportUrl(response?.report_download_url || "")
+    setRegistryMessage(buildMlflowStatus(response, "모델 확정을 완료했습니다."))
   }
 
   async function handleRegister() {
@@ -95,6 +106,7 @@ export default function FinalizePage() {
     }
     const response = await registryAPI.register({ run_id: finalizeResult.run_id, model_name: normalized })
     await refreshVersions(normalized)
+    setRegistryMessage(buildMlflowStatus(response, "레지스트리 등록을 완료했습니다."))
     return response
   }
 
@@ -106,7 +118,7 @@ export default function FinalizePage() {
     if (stage === "Production") {
       setRegistryMessage(buildRegistryMessage(response, "프로덕션 스테이지로 변경했습니다."))
     } else {
-      setRegistryMessage(`${STAGE_LABELS[stage] || stage} 상태로 변경했습니다.`)
+      setRegistryMessage(buildMlflowStatus(response, `${STAGE_LABELS[stage] || stage} 상태로 변경했습니다.`))
     }
   }
 
@@ -119,7 +131,7 @@ export default function FinalizePage() {
 
   const pipelineSteps = useMemo(() => {
     const steps = ["데이터 로드", "PyCaret setup"]
-    if (setupParams.normalize) steps.push(`정규화:${setupParams.normalize_method}`)
+    if (setupParams.normalize) steps.push(`정규화(${setupParams.normalize_method || "auto"})`)
     if (setupParams.fix_imbalance) steps.push("불균형 보정")
     if (setupParams.remove_outliers) steps.push("이상치 제거")
     if (setupParams.imputation_type) steps.push(`결측치 처리:${setupParams.imputation_type}`)
@@ -181,6 +193,8 @@ export default function FinalizePage() {
           reportUrl={reportUrl}
           reportError={finalizeResult?.report_error}
           reportGenerated={finalizeResult?.report_generated}
+          mlflowSynced={finalizeResult?.mlflow_synced}
+          mlflowError={finalizeResult?.mlflow_error}
         />
         <PipelineSummary steps={pipelineSteps} />
       </div>
