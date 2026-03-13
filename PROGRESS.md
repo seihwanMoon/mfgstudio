@@ -29,6 +29,9 @@ All planned tasks are currently complete.
 - 2026-03-13: added `MLflow > 운영 관리` for experiment housekeeping and report management, including experiment archive, safe-delete gating, report list, report reopen, report regenerate, and report PDF deletion.
 - 2026-03-13: localized MLflow tabs, experiment log view, experiment compare view, and run-status labels while wiring the new operations APIs.
 - 2026-03-13: added a model retirement workflow that archives stage first and, when no prediction history exists, also removes the MLflow version link and finalized model artifact.
+- 2026-03-13: added search and filter controls to `MLflow > 운영 관리` so large experiment/report lists can be narrowed by keyword and lifecycle state.
+- 2026-03-13: added a retirement dry-run preview so operators can inspect cleanup actions and remaining experiment-delete blockers before running destructive model cleanup.
+- 2026-03-13: added bulk operations for `MLflow > 운영 관리`, including filtered experiment archive and bulk PDF regeneration for missing reports.
 - 2026-03-13: fixed XAI `summary`, `dependence`, and individual SHAP failures caused by SHAP/raw-pipeline schema mismatches.
 - 2026-03-13: split the old Analyze flow into dedicated `Plots` and `XAI` workspaces.
 - 2026-03-13: cleaned several mojibake-heavy navigation and XAI panel labels.

@@ -76,6 +76,7 @@ export const opsAPI = {
   deleteExperiment: (experimentId) => api.delete(`/api/ops/experiments/${experimentId}`),
   reports: () => api.get("/api/ops/reports"),
   deleteReport: (modelId) => api.delete(`/api/ops/reports/${modelId}`),
+  retirePreview: (modelId) => api.get(`/api/ops/models/${modelId}/retire-preview`),
   retireModel: (modelId) => api.post(`/api/ops/models/${modelId}/retire`),
 }
 

@@ -98,13 +98,16 @@ Current state:
 - MLflow registry flows and report refresh hooks are now connected
 - `MLflow > 운영 관리` now exposes experiment archive/delete safety checks and report lifecycle controls
 - registered/finalized models can now enter a retirement workflow before an experiment becomes deletable
+- operations lists now support client-side search and lifecycle filtering for large histories
+- retirement now includes a dry-run preview that shows planned cleanup actions and whether the linked experiment could become deletable afterward
+- bulk archive and missing-report bulk generation are now available from the filtered operations lists
 
 Next work:
 
 - surface report refresh results in Production management UI if needed
 - tighten the link between Production version, MLflow version, and generated report
-- consider adding search/filter controls for large experiment and report lists
-- consider a second confirmation / dry-run preview for retirement when destructive cleanup is possible
+- consider server-side pagination if experiment and report lists grow significantly
+- consider bulk retirement or staged cleanup queues once operator confidence is high enough
 
 ## Recommended execution order
 

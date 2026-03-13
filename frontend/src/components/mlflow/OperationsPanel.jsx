@@ -1,3 +1,5 @@
+import { useMemo, useState } from "react"
+
 import { reportAPI } from "../../api"
 import { formatDateTimeKST } from "../../utils/formatters"
 
@@ -20,21 +22,31 @@ function SummaryCard({ label, value }) {
 function ActionButton({ children, onClick, disabled = false, tone = "default", as = "button", href }) {
   const style = {
     borderRadius: 8,
-    border: `1px solid ${tone === "danger" ? "rgba(248, 113, 113, 0.35)" : tone === "primary" ? "rgba(56, 189, 248, 0.35)" : tone === "warning" ? "rgba(245, 158, 11, 0.35)" : "var(--border)"}`,
-    background: tone === "danger"
-      ? "rgba(248, 113, 113, 0.1)"
-      : tone === "primary"
-        ? "rgba(56, 189, 248, 0.12)"
-        : tone === "warning"
-          ? "rgba(245, 158, 11, 0.12)"
-          : "var(--bg-surface)",
-    color: tone === "danger"
-      ? "var(--danger)"
-      : tone === "primary"
-        ? "var(--accent-blue)"
-        : tone === "warning"
-          ? "var(--warning)"
-          : "var(--text-primary)",
+    border: `1px solid ${
+      tone === "danger"
+        ? "rgba(248, 113, 113, 0.35)"
+        : tone === "primary"
+          ? "rgba(56, 189, 248, 0.35)"
+          : tone === "warning"
+            ? "rgba(245, 158, 11, 0.35)"
+            : "var(--border)"
+    }`,
+    background:
+      tone === "danger"
+        ? "rgba(248, 113, 113, 0.1)"
+        : tone === "primary"
+          ? "rgba(56, 189, 248, 0.12)"
+          : tone === "warning"
+            ? "rgba(245, 158, 11, 0.12)"
+            : "var(--bg-surface)",
+    color:
+      tone === "danger"
+        ? "var(--danger)"
+        : tone === "primary"
+          ? "var(--accent-blue)"
+          : tone === "warning"
+            ? "var(--warning)"
+            : "var(--text-primary)",
     padding: "8px 10px",
     fontSize: 12,
     textDecoration: "none",
@@ -62,10 +74,90 @@ function ActionButton({ children, onClick, disabled = false, tone = "default", a
 
 function Note({ children, tone = "default" }) {
   return (
-    <div style={{ color: tone === "warning" ? "var(--warning)" : "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
+    <div
+      style={{
+        color: tone === "warning" ? "var(--warning)" : "var(--text-muted)",
+        fontSize: 12,
+        lineHeight: 1.5,
+      }}
+    >
       {children}
     </div>
   )
+}
+
+function FilterBar({ title, description, search, onSearch, filter, onFilter, filterOptions, resultCount }) {
+  return (
+    <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+      <div>
+        <div style={{ color: "var(--text-primary)", fontWeight: 800, marginBottom: 6 }}>{title}</div>
+        <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>{description}</div>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.2fr) 220px auto",
+          gap: 10,
+          alignItems: "center",
+        }}
+      >
+        <input
+          value={search}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder="이름, 실험명, 데이터셋, 타깃으로 검색"
+          style={{
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            background: "var(--bg-surface-soft)",
+            color: "var(--text-primary)",
+            padding: "10px 12px",
+          }}
+        />
+        <select
+          value={filter}
+          onChange={(event) => onFilter(event.target.value)}
+          style={{
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            background: "var(--bg-surface-soft)",
+            color: "var(--text-primary)",
+            padding: "10px 12px",
+          }}
+        >
+          {filterOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "right" }}>표시 {resultCount}건</div>
+      </div>
+    </div>
+  )
+}
+
+function matchesExperimentFilter(item, filter) {
+  if (filter === "all") return true
+  if (filter === "archived") return item.status === "archived"
+  if (filter === "active") return item.status !== "archived"
+  if (filter === "deletable") return item.can_delete
+  if (filter === "blocked") return !item.can_delete
+  if (filter === "production") return (item.production_count || 0) > 0
+  return true
+}
+
+function matchesReportFilter(item, filter) {
+  if (filter === "all") return true
+  if (filter === "existing") return item.report_exists
+  if (filter === "missing") return !item.report_exists
+  if (filter === "retirable") return item.can_cleanup_artifacts
+  if (filter === "registry") return item.has_registry_version
+  if (filter === "production") return item.stage === "Production"
+  return true
+}
+
+function formatMaybeDate(value) {
+  return value ? formatDateTimeKST(value) : "-"
 }
 
 export default function OperationsPanel({
@@ -73,11 +165,55 @@ export default function OperationsPanel({
   reports = [],
   message = "",
   onArchiveExperiment,
+  onArchiveExperiments,
   onDeleteExperiment,
   onRetireModel,
   onRegenerateReport,
+  onRegenerateReports,
   onDeleteReport,
 }) {
+  const [experimentSearch, setExperimentSearch] = useState("")
+  const [experimentFilter, setExperimentFilter] = useState("all")
+  const [reportSearch, setReportSearch] = useState("")
+  const [reportFilter, setReportFilter] = useState("all")
+
+  const normalizedExperimentSearch = experimentSearch.trim().toLowerCase()
+  const normalizedReportSearch = reportSearch.trim().toLowerCase()
+
+  const filteredExperiments = useMemo(() => {
+    return experiments.filter((item) => {
+      const haystack = [
+        item.name,
+        item.dataset_name,
+        item.target_col,
+        item.module_type,
+        item.status,
+        String(item.experiment_id),
+      ]
+        .join(" ")
+        .toLowerCase()
+      const matchesSearch = !normalizedExperimentSearch || haystack.includes(normalizedExperimentSearch)
+      return matchesSearch && matchesExperimentFilter(item, experimentFilter)
+    })
+  }, [experiments, normalizedExperimentSearch, experimentFilter])
+
+  const filteredReports = useMemo(() => {
+    return reports.filter((item) => {
+      const haystack = [
+        item.model_name,
+        item.algorithm,
+        item.experiment_name,
+        item.dataset_name,
+        item.stage,
+        String(item.model_id),
+      ]
+        .join(" ")
+        .toLowerCase()
+      const matchesSearch = !normalizedReportSearch || haystack.includes(normalizedReportSearch)
+      return matchesSearch && matchesReportFilter(item, reportFilter)
+    })
+  }, [reports, normalizedReportSearch, reportFilter])
+
   const archivedCount = experiments.filter((item) => item.status === "archived").length
   const deletableCount = experiments.filter((item) => item.can_delete).length
   const existingReports = reports.filter((item) => item.report_exists).length
@@ -88,7 +224,7 @@ export default function OperationsPanel({
         <SummaryCard label="관리 대상 실험" value={experiments.length} />
         <SummaryCard label="즉시 삭제 가능" value={deletableCount} />
         <SummaryCard label="보관된 실험" value={archivedCount} />
-        <SummaryCard label="생성된 리포트" value={existingReports} />
+        <SummaryCard label="생성된 보고서" value={existingReports} />
       </div>
 
       {message ? (
@@ -116,13 +252,31 @@ export default function OperationsPanel({
           padding: 16,
         }}
       >
-        <div style={{ color: "var(--text-primary)", fontWeight: 800, marginBottom: 6 }}>실험 정리</div>
-        <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, marginBottom: 12 }}>
-          운영 자산과 연결되지 않은 실험만 즉시 삭제할 수 있습니다. 등록/배포/예측 이력이 있는 실험은 먼저 보관하거나, 아래 보고서 관리에서 해당 모델을 은퇴 정리해야 합니다.
+        <FilterBar
+          title="실험 정리"
+          description="운영 자산과 연결되지 않은 실험만 즉시 삭제할 수 있습니다. 등록, 배포, 예측 이력이 있는 실험은 먼저 보관하거나 아래 모델/보고서 관리에서 연결된 자산을 정리해야 합니다."
+          search={experimentSearch}
+          onSearch={setExperimentSearch}
+          filter={experimentFilter}
+          onFilter={setExperimentFilter}
+          filterOptions={[
+            { value: "all", label: "전체 실험" },
+            { value: "active", label: "활성 실험" },
+            { value: "archived", label: "보관 실험" },
+            { value: "deletable", label: "삭제 가능" },
+            { value: "blocked", label: "제한 있음" },
+            { value: "production", label: "프로덕션 포함" },
+          ]}
+          resultCount={filteredExperiments.length}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <ActionButton onClick={() => onArchiveExperiments?.(filteredExperiments)}>
+            필터 결과 일괄 보관
+          </ActionButton>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {!experiments.length ? <div style={{ color: "var(--text-secondary)" }}>관리할 실험이 없습니다.</div> : null}
-          {experiments.map((item) => (
+          {!filteredExperiments.length ? <div style={{ color: "var(--text-secondary)" }}>조건에 맞는 실험이 없습니다.</div> : null}
+          {filteredExperiments.map((item) => (
             <div
               key={item.experiment_id}
               style={{
@@ -143,23 +297,21 @@ export default function OperationsPanel({
                   {item.module_type} / 타깃 {item.target_col || "-"} / 데이터셋 {item.dataset_name || "-"}
                 </div>
                 <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                  생성 {formatDateTimeKST(item.created_at)} / 상태 {item.status}
+                  생성 {formatMaybeDate(item.created_at)} / 상태 {item.status}
                 </div>
               </div>
               <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.7 }}>
                 <div>모델 {item.model_count}</div>
-                <div>finalize {item.finalized_count}</div>
+                <div>Finalize {item.finalized_count}</div>
                 <div>등록 {item.registered_count}</div>
                 <div>프로덕션 {item.production_count}</div>
               </div>
               <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.7 }}>
                 <div>예측 이력 {item.prediction_count}</div>
-                <div>리포트 {item.report_count}</div>
+                <div>보고서 {item.report_count}</div>
                 <div>컨텍스트 {item.context_exists ? "있음" : "없음"}</div>
                 {!item.can_delete && item.delete_blockers?.length ? (
-                  <div style={{ color: "var(--warning)", marginTop: 4 }}>
-                    제한: {item.delete_blockers.join(", ")}
-                  </div>
+                  <div style={{ color: "var(--warning)", marginTop: 4 }}>제한: {item.delete_blockers.join(", ")}</div>
                 ) : null}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -184,13 +336,31 @@ export default function OperationsPanel({
           padding: 16,
         }}
       >
-        <div style={{ color: "var(--text-primary)", fontWeight: 800, marginBottom: 6 }}>보고서 / 운영 모델 관리</div>
-        <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, marginBottom: 12 }}>
-          저장된 리포트를 다시 열고, 재생성하거나, PDF 파일만 삭제할 수 있습니다. `은퇴 정리`는 스테이지를 `Archived`로 내리고, 예측 이력이 없으면 MLflow 버전과 최종 모델 파일까지 함께 정리합니다.
+        <FilterBar
+          title="보고서 / 운영 모델 관리"
+          description="저장된 보고서를 다시 열고, 재생성하거나, PDF 파일만 삭제할 수 있습니다. `은퇴 정리`는 미리보기 후 실행되며 스테이지를 `Archived`로 내리고, 예측 이력이 없으면 MLflow 버전과 최종 모델 파일까지 함께 정리합니다."
+          search={reportSearch}
+          onSearch={setReportSearch}
+          filter={reportFilter}
+          onFilter={setReportFilter}
+          filterOptions={[
+            { value: "all", label: "전체 보고서" },
+            { value: "existing", label: "PDF 있음" },
+            { value: "missing", label: "PDF 없음" },
+            { value: "retirable", label: "완전 정리 가능" },
+            { value: "registry", label: "레지스트리 연결" },
+            { value: "production", label: "프로덕션 모델" },
+          ]}
+          resultCount={filteredReports.length}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <ActionButton onClick={() => onRegenerateReports?.(filteredReports)} tone="primary">
+            누락 PDF 일괄 생성
+          </ActionButton>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {!reports.length ? <div style={{ color: "var(--text-secondary)" }}>관리할 리포트가 없습니다.</div> : null}
-          {reports.map((item) => (
+          {!filteredReports.length ? <div style={{ color: "var(--text-secondary)" }}>조건에 맞는 보고서가 없습니다.</div> : null}
+          {filteredReports.map((item) => (
             <div
               key={item.model_id}
               style={{
@@ -211,12 +381,12 @@ export default function OperationsPanel({
                   {item.algorithm} / 실험 {item.experiment_name} / 데이터셋 {item.dataset_name}
                 </div>
                 <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
-                  스테이지 {item.stage} / 버전 {item.version ?? "-"} / 수정 {formatDateTimeKST(item.report_updated_at)}
+                  스테이지 {item.stage} / 버전 {item.version ?? "-"} / 수정 {formatMaybeDate(item.report_updated_at)}
                 </div>
               </div>
               <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.7 }}>
                 <div>예측 이력 {item.prediction_count}</div>
-                <div>리포트 {item.report_exists ? "있음" : "없음"}</div>
+                <div>보고서 {item.report_exists ? "있음" : "없음"}</div>
                 <div>레지스트리 {item.has_registry_version ? "연결됨" : "없음"}</div>
                 <div>모델 파일 {item.has_model_artifact ? "있음" : "없음"}</div>
               </div>
@@ -225,9 +395,9 @@ export default function OperationsPanel({
                   {item.report_path}
                 </div>
                 {item.can_cleanup_artifacts ? (
-                  <Note>예측 이력이 없어 은퇴 정리 시 버전/모델 파일까지 함께 정리할 수 있습니다.</Note>
+                  <Note>예측 이력이 없어 은퇴 정리 시 버전과 모델 파일까지 함께 정리할 수 있습니다.</Note>
                 ) : (
-                  <Note tone="warning">예측 이력이 있어 은퇴 정리 시 스테이지와 리포트만 정리하고 버전/모델 파일은 유지합니다.</Note>
+                  <Note tone="warning">예측 이력이 있어 은퇴 정리 시 스테이지와 보고서만 정리되고 버전과 모델 파일은 유지됩니다.</Note>
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>

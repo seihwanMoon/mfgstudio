@@ -15,6 +15,26 @@ const TABS = [
   ["operations", "운영 관리"],
 ]
 
+function buildRetirePreviewMessage(item, preview) {
+  const actions = preview.actions?.length
+    ? preview.actions.map((value, index) => `${index + 1}. ${value}`).join("\n")
+    : "예정된 정리 작업이 없습니다."
+  const skipped = preview.skipped?.length ? `\n\n제외 항목:\n- ${preview.skipped.join("\n- ")}` : ""
+  const deleteState = preview.experiment_deletable_after
+    ? "\n\n이 정리 후 해당 실험은 삭제 가능 상태가 됩니다."
+    : preview.experiment_delete_blockers_after?.length
+      ? `\n\n이 정리 후에도 실험 삭제 제한이 남습니다:\n- ${preview.experiment_delete_blockers_after.join("\n- ")}`
+      : ""
+
+  return (
+    `'${item.model_name}' 모델 은퇴 정리 미리보기\n\n` +
+    `예정 작업:\n${actions}` +
+    skipped +
+    deleteState +
+    "\n\n이대로 실행하시겠습니까?"
+  )
+}
+
 export default function MLflowPage() {
   const [status, setStatus] = useState(null)
   const [models, setModels] = useState([])
@@ -105,45 +125,74 @@ export default function MLflowPage() {
 
   async function handleArchiveExperiment(item) {
     await opsAPI.archiveExperiment(item.experiment_id)
-    setOpsMessage(`실험 '${item.name}'을(를) 보관 상태로 변경했습니다.`)
+    setOpsMessage(`실험 '${item.name}'을 보관 상태로 변경했습니다.`)
+    await refreshOperations()
+  }
+
+  async function handleArchiveExperiments(items) {
+    const targets = items.filter((item) => item.status !== "archived")
+    if (!targets.length) {
+      setOpsMessage("보관할 실험이 없습니다.")
+      return
+    }
+    const confirmed = window.confirm(`선택된 ${targets.length}개 실험을 보관 상태로 변경하시겠습니까?`)
+    if (!confirmed) return
+    await Promise.all(targets.map((item) => opsAPI.archiveExperiment(item.experiment_id)))
+    setOpsMessage(`${targets.length}개 실험을 보관 상태로 변경했습니다.`)
     await refreshOperations()
   }
 
   async function handleDeleteExperiment(item) {
-    const confirmed = window.confirm(`실험 '${item.name}'을(를) 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)
+    const confirmed = window.confirm(`실험 '${item.name}'을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)
     if (!confirmed) return
     await opsAPI.deleteExperiment(item.experiment_id)
-    setOpsMessage(`실험 '${item.name}'을(를) 삭제했습니다.`)
+    setOpsMessage(`실험 '${item.name}'을 삭제했습니다.`)
     await Promise.all([refreshOperations(), refreshMlflowExperiments(), refreshRegistry()])
   }
 
   async function handleRegenerateReport(item) {
     await reportAPI.generate(item.model_id, true)
-    setOpsMessage(`리포트 '${item.model_name}'을(를) 다시 생성했습니다.`)
+    setOpsMessage(`보고서 '${item.model_name}'을 다시 생성했습니다.`)
+    await refreshOperations()
+  }
+
+  async function handleRegenerateReports(items) {
+    const targets = items.filter((item) => !item.report_exists)
+    if (!targets.length) {
+      setOpsMessage("재생성할 누락 보고서가 없습니다.")
+      return
+    }
+    const confirmed = window.confirm(`누락된 ${targets.length}개 보고서를 일괄 생성하시겠습니까?`)
+    if (!confirmed) return
+    await Promise.all(targets.map((item) => reportAPI.generate(item.model_id, true)))
+    setOpsMessage(`누락된 ${targets.length}개 보고서를 생성했습니다.`)
     await refreshOperations()
   }
 
   async function handleDeleteReport(item) {
-    const confirmed = window.confirm(`리포트 PDF '${item.model_name}'을(를) 삭제하시겠습니까?`)
+    const confirmed = window.confirm(`보고서 PDF '${item.model_name}'을 삭제하시겠습니까?`)
     if (!confirmed) return
     await opsAPI.deleteReport(item.model_id)
-    setOpsMessage(`리포트 PDF '${item.model_name}'을(를) 삭제했습니다.`)
+    setOpsMessage(`보고서 PDF '${item.model_name}'을 삭제했습니다.`)
     await refreshOperations()
   }
 
   async function handleRetireModel(item) {
-    const confirmed = window.confirm(
-      `'${item.model_name}' 모델을 은퇴 정리하시겠습니까?\n\n` +
-      `1. 스테이지를 Archived로 전환\n` +
-      `2. 리포트 PDF 삭제\n` +
-      `3. 예측 이력이 없으면 MLflow 버전과 최종 모델 파일도 정리`
-    )
+    const preview = await opsAPI.retirePreview(item.model_id)
+    const confirmed = window.confirm(buildRetirePreviewMessage(item, preview))
     if (!confirmed) return
+
     const response = await opsAPI.retireModel(item.model_id)
-    const actions = response.actions?.length ? response.actions.join(", ") : "수행된 정리 작업 없음"
+    const actions = response.actions?.length ? response.actions.join(", ") : "실행된 정리 작업 없음"
     const skipped = response.skipped?.length ? ` / 제외: ${response.skipped.join(", ")}` : ""
-    setOpsMessage(`모델 '${item.model_name}' 은퇴 정리 완료: ${actions}${skipped}`)
-    await Promise.all([refreshOperations(), refreshRegistry()])
+    const deleteState = response.experiment_deletable_after
+      ? " / 연결 실험은 이제 삭제 가능합니다."
+      : response.experiment_delete_blockers_after?.length
+        ? ` / 남은 실험 삭제 제한: ${response.experiment_delete_blockers_after.join(", ")}`
+        : ""
+
+    setOpsMessage(`모델 '${item.model_name}' 은퇴 정리 완료: ${actions}${skipped}${deleteState}`)
+    await Promise.all([refreshOperations(), refreshRegistry(), refreshMlflowExperiments()])
   }
 
   return (
@@ -152,7 +201,11 @@ export default function MLflowPage() {
         <div style={{ border: "1px solid #1A3352", borderRadius: 14, background: "#0D1926", padding: 16 }}>
           <div style={{ color: "#E2EEFF", fontWeight: 700, marginBottom: 8 }}>MLflow 상태</div>
           <div style={{ color: status?.status === "connected" ? "#34D399" : "#F87171", fontWeight: 700 }}>
-            {status?.status === "connected" ? "연결됨" : status?.status === "disconnected" ? "연결 안됨" : status?.status || "상태 없음"}
+            {status?.status === "connected"
+              ? "연결됨"
+              : status?.status === "disconnected"
+                ? "연결 안 됨"
+                : status?.status || "상태 없음"}
           </div>
           <div style={{ color: "#8BA8C8", fontSize: 12, marginTop: 8 }}>{status?.uri || "-"}</div>
         </div>
@@ -204,9 +257,11 @@ export default function MLflowPage() {
             reports={managedReports}
             message={opsMessage}
             onArchiveExperiment={handleArchiveExperiment}
+            onArchiveExperiments={handleArchiveExperiments}
             onDeleteExperiment={handleDeleteExperiment}
             onRetireModel={handleRetireModel}
             onRegenerateReport={handleRegenerateReport}
+            onRegenerateReports={handleRegenerateReports}
             onDeleteReport={handleDeleteReport}
           />
         ) : null}

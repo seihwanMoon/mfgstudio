@@ -25,6 +25,9 @@ Latest completed work:
 - `MLflow` page now includes an `운영 관리` tab for experiment archive/delete safety checks and report management
 - report files can now be reopened, regenerated, and deleted from the management UI; experiments can be archived and only non-operational experiments are hard-deletable
 - `은퇴 정리` now exists for registered/finalized models; it archives the stage first and conditionally cleans MLflow version + model artifact when prediction history is absent
+- `운영 관리` now has client-side search/filter for both experiment cleanup and report/model management lists
+- `은퇴 정리` now runs through a dry-run preview first so the operator can see projected cleanup actions and remaining experiment-delete blockers before execution
+- `운영 관리` now also supports bulk archive for filtered experiments and bulk regeneration for missing report PDFs
 
 ## Current working tree
 
@@ -81,6 +84,7 @@ Main files touched in the latest cycle:
   - regenerated enriched PDF for `model_id=665`; response size increased to roughly `100 KB`, confirming the richer template is being used
   - `GET /api/ops/experiments` returns `200`
   - `GET /api/ops/reports` returns `200`
+  - `GET /api/ops/models/{model_id}/retire-preview` returns `200`
   - local/runtime checks confirmed `MlflowClient` exposes `delete_model_version` and `delete_registered_model` for the retirement workflow
 - frontend container content validation:
   - `frontend/src/components/layout/AppShell.jsx`
