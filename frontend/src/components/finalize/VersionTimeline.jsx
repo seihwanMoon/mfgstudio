@@ -13,7 +13,7 @@ export default function VersionTimeline({ versions = [] }) {
         {versions.length ? (
           versions.map((version) => (
             <div key={version.version} style={{ borderTop: "1px solid #1A3352", paddingTop: 8, color: "#8BA8C8" }}>
-              v{version.version} · {STAGE_LABELS[version.stage] || version.stage} · {version.algorithm}
+              v{version.version} / {STAGE_LABELS[version.stage] || version.stage} / {version.algorithm}
             </div>
           ))
         ) : (

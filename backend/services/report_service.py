@@ -248,13 +248,20 @@ def _build_tune_summary(model: TrainedModel, context_meta: dict) -> list[dict]:
     ]
 
 
+def resolve_report_path(model: TrainedModel) -> Path:
+    model_name = model.mlflow_model_name or model.algorithm
+    slug = _safe_slug(model_name)
+    version_suffix = f"_v{model.mlflow_version}" if model.mlflow_version is not None else ""
+    return Path(settings.report_dir) / f"{slug}{version_suffix}_model_{model.id}.pdf"
+
+
 def _build_artifact_rows(model: TrainedModel, experiment_id: int) -> list[dict]:
     report_path = resolve_report_path(model)
     items = [
         ("최종 모델 파일", model.model_path),
-        ("리포트 파일", str(report_path)),
+        ("보고서 파일", str(report_path)),
         ("실험 컨텍스트", str(_experiment_metadata_path(experiment_id))),
-        ("PyCaret 실험 스냅샷", str(_experiment_pickle_path(experiment_id))),
+        ("PyCaret 실험 피클", str(_experiment_pickle_path(experiment_id))),
     ]
     rows = []
     for label, raw_path in items:
@@ -275,22 +282,15 @@ def _build_summary_lines(model: TrainedModel, experiment: Experiment | None, dat
     compare_options = params.get("compare_options", {})
     candidate_count = len(context_meta.get("run_ids", {})) if isinstance(context_meta, dict) else 0
     lines = [
-        f"{_module_label(experiment.module_type if experiment else None)} 실험 `{experiment.name if experiment else '-'}`에서 `{experiment.target_col if experiment else '-'}` 예측을 위해 생성된 모델입니다.",
-        f"데이터셋은 `{dataset.filename if dataset else '-'}`이며, 총 {_format_value(dataset.row_count if dataset else None)}행 / {_format_value(dataset.col_count if dataset else None)}열을 기준으로 학습되었습니다.",
-        f"비교 기준은 `{_format_value(compare_options.get('sort'))}`이고 실제 비교 실행 모델 수는 `{candidate_count}`건입니다.",
+        f"{_module_label(experiment.module_type if experiment else None)} 실험 `{experiment.name if experiment else '-'}`에서 `{experiment.target_col if experiment else '-'}` 타깃을 위해 생성된 모델입니다.",
+        f"데이터셋은 `{dataset.filename if dataset else '-'}`이며 총 {_format_value(dataset.row_count if dataset else None)}행 / {_format_value(dataset.col_count if dataset else None)}열을 기준으로 학습했습니다.",
+        f"비교 기준은 `{_format_value(compare_options.get('sort'))}`이며 실제 비교 실행 모델 수는 `{candidate_count}`건입니다.",
     ]
     if model.is_tuned:
-        lines.append("튜닝 이력이 있어 tuned estimator 기준 성능과 하이퍼파라미터 변경사항을 함께 기록합니다.")
+        lines.append("튜닝 이력이 있어 tuned estimator 기준 성능과 하이퍼파라미터 변동 사항을 함께 기록합니다.")
     if model.stage == "Production":
-        lines.append("현재 이 모델은 프로덕션 스테이지에 배치되어 운영 지표와 리포트 재생성 대상에 포함됩니다.")
+        lines.append("현재 이 모델은 프로덕션 스테이지에 배치되어 운영 지표와 보고서 재생성 대상에 포함됩니다.")
     return lines
-
-
-def resolve_report_path(model: TrainedModel) -> Path:
-    model_name = model.mlflow_model_name or model.algorithm
-    slug = _safe_slug(model_name)
-    version_suffix = f"_v{model.mlflow_version}" if model.mlflow_version is not None else ""
-    return Path(settings.report_dir) / f"{slug}{version_suffix}_model_{model.id}.pdf"
 
 
 def build_report_context(

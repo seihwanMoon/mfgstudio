@@ -16,6 +16,16 @@ const STAGE_LABELS = {
   None: "미지정",
 }
 
+function buildRegistryMessage(response, fallbackText) {
+  if (response?.report_error) {
+    return `보고서 갱신 경고: ${response.report_error}`
+  }
+  if (response?.report_generated) {
+    return "프로덕션 보고서를 다시 생성했습니다."
+  }
+  return fallbackText
+}
+
 export default function FinalizePage() {
   const { currentExperimentId, selectedModelsForTune, setupParams } = useStore()
   const [models, setModels] = useState([])
@@ -25,6 +35,7 @@ export default function FinalizePage() {
   const [registryDraft, setRegistryDraft] = useState("manufacturing_model")
   const [versions, setVersions] = useState([])
   const [registryMessage, setRegistryMessage] = useState("")
+  const [registryReportUrl, setRegistryReportUrl] = useState("")
 
   useEffect(() => {
     if (!currentExperimentId) return
@@ -73,6 +84,7 @@ export default function FinalizePage() {
     if (!selected) return
     const response = await trainAPI.finalize(selected.id)
     setFinalizeResult(response)
+    setRegistryReportUrl(response?.report_download_url || "")
   }
 
   async function handleRegister() {
@@ -89,14 +101,10 @@ export default function FinalizePage() {
   async function handleStage(version, stage) {
     const response = await registryAPI.changeStage(registryName, { version, stage })
     await refreshVersions(registryName)
+    setRegistryReportUrl(response?.report_download_url || "")
+
     if (stage === "Production") {
-      setRegistryMessage(
-        response?.report_error
-          ? `프로덕션 리포트 경고: ${response.report_error}`
-          : response?.report_generated
-            ? "프로덕션 리포트를 다시 생성했습니다."
-            : "프로덕션 스테이지로 변경했습니다."
-      )
+      setRegistryMessage(buildRegistryMessage(response, "프로덕션 스테이지로 변경했습니다."))
     } else {
       setRegistryMessage(`${STAGE_LABELS[stage] || stage} 상태로 변경했습니다.`)
     }
@@ -105,13 +113,8 @@ export default function FinalizePage() {
   async function handleRollback(version) {
     const response = await registryAPI.rollback(registryName, { version })
     await refreshVersions(registryName)
-    setRegistryMessage(
-      response?.report_error
-        ? `롤백 리포트 경고: ${response.report_error}`
-        : response?.report_generated
-          ? "롤백 후 프로덕션 리포트를 다시 생성했습니다."
-          : "롤백을 완료했습니다."
-    )
+    setRegistryReportUrl(response?.report_download_url || "")
+    setRegistryMessage(buildRegistryMessage(response, "롤백을 완료했습니다."))
   }
 
   const pipelineSteps = useMemo(() => {
@@ -199,9 +202,21 @@ export default function FinalizePage() {
               color: "var(--text-primary)",
               fontSize: 13,
               lineHeight: 1.5,
+              display: "grid",
+              gap: 8,
             }}
           >
-            {registryMessage}
+            <div>{registryMessage}</div>
+            {registryReportUrl ? (
+              <a
+                href={registryReportUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "var(--accent-blue)", fontWeight: 700, textDecoration: "none" }}
+              >
+                갱신된 보고서 열기
+              </a>
+            ) : null}
           </div>
         ) : null}
         <StageManager modelName={registryName} versions={versions} onChangeStage={handleStage} onRollback={handleRollback} />

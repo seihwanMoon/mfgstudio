@@ -6,11 +6,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models.trained_model import TrainedModel
 from services.model_catalog_service import get_catalog_entries
-from services.mlflow_service import (
-    get_all_registered_models,
-    register_run_model,
-    transition_model_stage,
-)
+from services.mlflow_service import get_all_registered_models, register_run_model, transition_model_stage
 from services.report_service import generate_model_report
 
 router = APIRouter()

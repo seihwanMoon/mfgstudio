@@ -50,6 +50,7 @@ Current state:
 - report API now supports metadata lookup and explicit regeneration
 - Production stage changes now refresh the report
 - a real saved model (`model_id=665`) successfully passed `meta -> generate -> download(PDF)` after pinning a compatible `pydyf` version for the backend image
+- Finalize now surfaces a direct link to the refreshed report after Production stage changes and rollback
 
 Next work:
 
@@ -81,6 +82,7 @@ Current state:
 - the app shell, sidebar, header, and the new `Plots` / `XAI` screens are now back in Korean
 - Tune, Finalize, MLflow, and several dashboard/detail panels were also re-localized to Korean
 - compare leaderboard, MLflow registry/schedule panels, and the PDF report template were also normalized to Korean
+- Finalize stage management, registry registration, MLflow logs, and report labels were re-normalized after additional mojibake cleanup
 - mixed-language and mojibake strings may still exist in lower-traffic or not-yet-revisited components
 
 Next work:
@@ -101,6 +103,7 @@ Current state:
 - operations lists now support client-side search and lifecycle filtering for large histories
 - retirement now includes a dry-run preview that shows planned cleanup actions and whether the linked experiment could become deletable afterward
 - bulk archive and missing-report bulk generation are now available from the filtered operations lists
+- Production report refresh results are now surfaced again from the Finalize screen with a direct reopen link
 
 Next work:
 

@@ -28,6 +28,9 @@ Latest completed work:
 - `운영 관리` now has client-side search/filter for both experiment cleanup and report/model management lists
 - `은퇴 정리` now runs through a dry-run preview first so the operator can see projected cleanup actions and remaining experiment-delete blockers before execution
 - `운영 관리` now also supports bulk archive for filtered experiments and bulk regeneration for missing report PDFs
+- Finalize / Registry / MLflow log panels were re-normalized to Korean after additional mojibake cleanup
+- Finalize now exposes a direct report-open link after Production stage changes and rollback-triggered report refreshes
+- report service labels and the PDF template were normalized to Korean so generated PDFs match the product UI again
 
 ## Current working tree
 
@@ -39,6 +42,7 @@ Main files touched in the latest cycle:
 - [backend/routers/train.py](D:/GITHUB/mfgstudio/backend/routers/train.py)
 - [backend/routers/registry.py](D:/GITHUB/mfgstudio/backend/routers/registry.py)
 - [backend/services/pycaret_service.py](D:/GITHUB/mfgstudio/backend/services/pycaret_service.py)
+- [backend/services/report_service.py](D:/GITHUB/mfgstudio/backend/services/report_service.py)
 - [backend/templates/report.html](D:/GITHUB/mfgstudio/backend/templates/report.html)
 - [frontend/src/App.jsx](D:/GITHUB/mfgstudio/frontend/src/App.jsx)
 - [frontend/src/pages/AnalyzePage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/AnalyzePage.jsx)
@@ -63,6 +67,9 @@ Main files touched in the latest cycle:
 - [frontend/src/components/finalize/SelectedModelCard.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/SelectedModelCard.jsx)
 - [frontend/src/components/finalize/StageManager.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/StageManager.jsx)
 - [frontend/src/components/finalize/VersionTimeline.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/VersionTimeline.jsx)
+- [frontend/src/components/finalize/StageManager.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/StageManager.jsx)
+- [frontend/src/components/finalize/MLflowRegisterForm.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/MLflowRegisterForm.jsx)
+- [frontend/src/components/mlflow/ModelRegistryList.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/ModelRegistryList.jsx)
 - [frontend/src/pages/MLflowPage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/MLflowPage.jsx)
 - [frontend/src/components/mlflow/ExperimentCompareView.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/ExperimentCompareView.jsx)
 - [frontend/src/components/mlflow/ExperimentLogTable.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/ExperimentLogTable.jsx)
