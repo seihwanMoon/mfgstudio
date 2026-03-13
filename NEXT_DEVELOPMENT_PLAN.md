@@ -1,12 +1,12 @@
 # Next Development Plan
 
-Last updated: 2026-03-12
+Last updated: 2026-03-13
 
 ## Goal
 
-The next phase is to align the product more closely with the native PyCaret workflow and make the app-side operations view match real MLflow behavior more directly.
+다음 단계의 목표는 기능 추가보다 “PyCaret 원형과의 정합성”과 “운영 제품성”을 높이는 것입니다.
 
-Reference workflow:
+기준 흐름:
 
 1. `setup()`
 2. `compare_models()`
@@ -14,157 +14,97 @@ Reference workflow:
 4. `blend_models()` / `stack_models()` / `automl()`
 5. `plot_model()` / `interpret_model()` / `dashboard()`
 6. `finalize_model()`
-7. `save_model()` / registry / predict / monitoring
+7. registry / predict / monitoring
 
 ## Priority roadmap
 
-### P1. Compare / Tune MLflow Alignment
-
-Status: Completed on 2026-03-10
-
-Current result:
-
-- compare top-N candidates are logged to real MLflow runs
-- tune results are linked to real MLflow run ids
-- app-side MLflow view and real MLflow UI both show `compare::...` and `tune::...` runs
-
-### P2. PyCaret Experiment Persistence
-
-Status: Completed on 2026-03-10
-
-Current result:
-
-- experiment snapshots saved through `save_experiment()`
-- experiment restore through `load_experiment()`
-- cached model artifacts stored under `data/experiments/experiment_<id>/`
-- analyze / XAI / finalize can recover after clearing in-memory context
-
-### P3. Dynamic Model Catalog
-
-Status: Completed on 2026-03-12
-
-Current result:
-
-- `GET /api/train/models` now uses PyCaret bootstrap experiments
-- estimator lists are no longer tied to a tiny fixed hardcoded catalog
-- richer estimator metadata is exposed:
-  - `id`
-  - `name`
-  - `reference`
-  - `turbo`
-  - `family`
-  - `tags`
-- compare-screen filters now use catalog metadata for:
-  - model scope (`all` / `turbo` / `full`)
-  - model family (`linear`, `tree`, `boosting`, `ensemble`, etc.)
-
-### P4. PyCaret Late-Stage Workflow Expansion
+### P1. Time-Series Visualization Polish
 
 Status: In Progress
 
-Current result:
+현재 상태:
 
-- backend functions added for `blend_models()`, `stack_models()`, and `automl()`
-- new APIs added:
-  - `POST /api/train/ensemble`
-  - `POST /api/train/automl`
-- generated advanced candidates are inserted back into compare-result rows
-- Tune page includes advanced PyCaret controls
-- Finalize page can target generated candidate rows directly
-- blend-path MLflow lifecycle was fixed on 2026-03-12 so new `blend::...` and internal `Voting Regressor` runs finish correctly
+- 시계열 `forecast / residuals / acf / pacf`는 동작
+- `forecast`는 PyCaret native plotly figure로 전환
+- `residuals`는 residual-only chart로 보정
 
-Remaining:
+남은 작업:
 
-- validate stack/blend/automl UX polish in the Tune and Finalize screens
-- decide whether advanced candidate rows need richer metadata in compare/finalize views
+- forecast horizon 선택 UI 제공 여부 결정
+- 시계열 `Train/Test` 토글을 forecasting 의미에 맞게 더 명확히 표현
+- PyCaret 튜토리얼 예시와 비교해 정보 밀도와 설명 문구 추가
 
-### P5. Analyze / XAI Enhancement
+### P2. Analyze / XAI Enhancement
 
 Status: In Progress
 
-Scope:
+현재 상태:
 
-- expand `interpret_model()`
-- review `dashboard()` / `check_fairness()`
-- extend beyond SHAP into more native PyCaret explainability
+- 진단 플롯과 XAI 플롯이 분리됨
+- XAI는 `summary`, `dependence`, `pfi` 지원
 
-Current result:
+남은 작업:
 
-- analyze plot catalog now separates:
-  - diagnostic `plot_model()` options
-  - XAI options
-- analyze screen now supports XAI plot rendering for:
-  - `summary`
-  - `dependence`
-  - `pfi`
-- analyze page copy and selectors were cleaned up during the same pass
-- compare/finalize views now surface richer candidate metadata:
-  - `operation`
-  - `members`
-  - `resolved_model_name`
+- richer XAI variants 추가 검토
+- PyCaret native explainability 범위와 현재 구현 차이 문서화
+- 회귀/분류 화면의 XAI 결과 해석 문구 보강
 
-Remaining:
-
-- add richer XAI variants beyond `summary` / `dependence` / `pfi`
-- review whether `pdp` or fairness-related views should be added without destabilizing runtime dependencies
-
-### P6. Classification-Specific Optimization
+### P3. Advanced Candidate UX
 
 Status: In Progress
 
-Scope:
+현재 상태:
 
-- `calibrate_model()`
-- `optimize_threshold()`
+- `blend_models()`, `stack_models()`, `automl()`
+- `calibrate_model()`, `optimize_threshold()`
+- 후보 메타데이터 일부 노출
 
-Current result:
+남은 작업:
 
-- backend functions added for:
-  - `calibrate_model()`
-  - `optimize_threshold()`
-- new API added:
-  - `POST /api/train/classification-optimize`
-- Tune screen now exposes classification-only advanced actions for:
-  - `Calibrate Model`
-  - `Optimize Threshold`
-- threshold optimization is now guarded so it only runs for binary classification datasets
-- multiclass requests return a clear `400` message instead of a generic `500`
+- Compare / Tune / Finalize 화면에서 advanced candidate 구분 강화
+- `operation`, `members`, `resolved_model_name`, threshold/candidate 특성을 더 명확히 표시
+- 최종 추천 로직과 후보 표시 기준 정리
 
-Remaining:
+### P4. MLflow Ops View Refinement
 
-- decide whether optimized threshold values themselves should be surfaced in the UI
-- consider surfacing calibration / threshold method details more explicitly in the UI
+Status: In Progress
 
-### P7. MLflow Ops View Refinement
+현재 상태:
 
-Status: Completed on 2026-03-10
+- 실제 MLflow experiment / run / registry 연동
+- app-side MLflow 화면 정리 완료
 
-Current result:
+남은 작업:
 
-- app-side MLflow screen filters PyCaret internal noise runs
-- KST formatting applied in the frontend
-- experiment compare summary cards and metric table added
-- schedule and registry wording cleaned up
+- 실험 로그 필터링 고도화
+- 최종 모델과 후보 모델의 MLflow run 관계 더 명확히 노출
+- 앱 내부 비교 화면과 MLflow 비교 화면 간 연결 강화
+
+### P5. Copy / Localization Cleanup
+
+Status: In Progress
+
+현재 상태:
+
+- 다수 mojibake는 정리됨
+- 일부 화면은 generic tabular 용어가 남아 있음
+
+남은 작업:
+
+- 시계열 전용 문구 정리
+- Tune / Analyze / Finalize 설명 문구 재점검
+- 사용자 안내 문구를 PyCaret 개념과 일치시키기
 
 ## Execution order for the next session
 
-1. Re-verify the full time-series workflow end-to-end after today's compare/tune/plot fixes
-2. Continue Analyze / XAI enhancement
-3. Polish advanced PyCaret candidate UX in Tune / Finalize
-4. Surface classification optimization metadata more clearly
-5. Decide whether time-series Tune / Analyze screens need forecasting-specific labels and controls
+1. 시계열 Analyze 화면 UX 정리
+2. XAI 확장 또는 해석 문구 보강
+3. advanced candidate UX 정리
+4. MLflow ops view 추가 정제
+5. 남은 mixed-language / generic wording cleanup
 
 ## Notes
 
-- user-facing app catalog should continue to center on `manufacturing_model`
-- browser `chrome-extension://... postMessage` errors are still treated as extension noise, not app errors
-- time-series support now covers:
-  - `setup()` with automatic datetime-index detection
-  - `compare`
-  - `tune` with forecasting-specific `custom_grid`
-  - `forecast` / `residuals` / `acf` / `pacf` plot rendering
-- before starting new work, re-check:
-  - `git status --short`
-  - `npm run build`
-  - Python compile checks
-  - `docker compose up --build -d`
+- 현재 샘플 기준 blocker는 없음
+- 시계열은 이제 기능적으로 동작하므로 다음 단계는 안정화보다 해석성과 UX 개선
+- 브라우저의 `chrome-extension://... postMessage` 오류는 계속 확장 프로그램 노이즈로 간주

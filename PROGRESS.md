@@ -1,7 +1,7 @@
 # PROGRESS
 
 > Rule: check this file before starting work, mark completed items with `[x]`, and record blockers under `Error Log`.
-> Current status reflects the codebase as of 2026-03-12.
+> Current status reflects the codebase as of 2026-03-13.
 
 ---
 
@@ -266,6 +266,10 @@ All planned tasks are currently complete.
 | 2026-03-12 | Restored time-series compare by fixing estimator slug/file persistence for names with special characters, then verified `compare_models()` results for `STLF`, `Huber w/ Cond. Deseasonalize & Detrending`, `TBATS`, `ARIMA`, and `BATS` through the live SSE endpoint | Codex |
 | 2026-03-12 | Added time-series-specific tuning by generating safe default `custom_grid` values for forecasting estimators, removed unsupported generic tune options from the PyCaret time-series path, and verified `/api/train/tune/55__STLF/stream` returns `200` with trial and done events | Codex |
 | 2026-03-12 | Replaced time-series HTML-only analysis output with backend-generated PNG plots for `forecast`, `residuals`, `acf`, and `pacf`, normalized `PeriodIndex` handling for matplotlib, and verified all four plot endpoints return live `200` image responses | Codex |
+| 2026-03-13 | Revalidated the full time-series path on a fresh experiment, fixed persisted-context reload issues so compare/tune/analyze/finalize all use the latest disk snapshot, and restored `forecast` / `residuals` API stability across repeated requests | Codex |
+| 2026-03-13 | Switched time-series `forecast / residuals / acf / pacf` analysis views to PyCaret native plotly figures, added future-horizon expansion for forecast plots, and preserved PNG fallback for unsupported native cases | Codex |
+| 2026-03-13 | Replaced the time-series residual view with a residual-only plotly chart because PyCaret's raw residual figure mixed actual values and residuals on the same axis, which was misleading in the app UI | Codex |
+| 2026-03-13 | Rewrote `README.md` to reflect the real current state of the product, including module-by-module support, live MLflow integration, sample datasets, and the current next-step documentation set | Codex |
 
 ---
 
@@ -302,3 +306,10 @@ Cause:
 - tune failed because `pycaret.time_series.tune_model()` does not accept the generic tabular `search_library` path and requires estimator-specific `custom_grid`
 - analyze failed because PyCaret time-series plots were saved as `.html`, while the app expected PNG images, and matplotlib could not render raw `PeriodIndex` values directly
 Resolution: resolved on 2026-03-12 by sanitizing time-series artifact slugs, adding a time-series-specific tuning branch with default `custom_grid` generation, and replacing HTML plot consumption with backend-generated PNG plots for `forecast`, `residuals`, `acf`, and `pacf`.
+
+### [2026-03-13] Time-series plot mismatch with PyCaret native visuals
+Symptom: time-series forecast and residual charts were technically working but did not match the shape and information density of PyCaret's own forecasting tutorial outputs.
+Cause:
+- the app was flattening time-series analysis into custom static plots
+- PyCaret's native `residuals` plot also mixed actual values and residuals on one chart, which looked incorrect in the app
+Resolution: Resolved on 2026-03-13 by switching `forecast / residuals / acf / pacf` to native plotly figures when available, extending forecast horizon for the "future forecast" mode, and replacing the residual screen with a residual-only chart for clearer interpretation.
