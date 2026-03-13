@@ -163,6 +163,41 @@
       .section-break {
         margin-top: 8px;
       }
+
+      .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .chart-card {
+        border: 1px solid #d9e7f4;
+        border-radius: 14px;
+        padding: 12px;
+        background: #f8fbff;
+      }
+
+      .chart-title {
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+
+      .chart-meta {
+        margin-bottom: 8px;
+      }
+
+      .chart-image {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid #d9e7f4;
+        background: #ffffff;
+      }
+
+      .chart-caption {
+        margin-top: 8px;
+        color: #475569;
+      }
     </style>
   </head>
   <body>
@@ -378,6 +413,36 @@
         </tbody>
       </table>
     </section>
+
+    {% if report_charts %}
+    <section class="panel">
+      <div class="panel-title">대표 분석 산출물</div>
+      <div class="chart-grid">
+        {% for item in report_charts %}
+        <div class="chart-card">
+          <div class="chart-title">{{ item.title }}</div>
+          <div class="chart-meta">
+            <span class="badge ok">{{ item.family_label }}</span>
+            <span class="badge {% if item.fallback_used %}warn{% else %}ok{% endif %}">
+              {% if item.fallback_used %}앱 fallback{% else %}PyCaret native{% endif %}
+            </span>
+          </div>
+          <img class="chart-image" src="{{ item.image_data_url }}" alt="{{ item.title }}" />
+          {% if item.caption %}
+          <p class="chart-caption">{{ item.caption }}</p>
+          {% endif %}
+          <p class="muted">렌더링 경로: {{ item.native_source }}</p>
+          {% if item.native_reason %}
+          <p class="muted">native 경로: {{ item.native_reason }}</p>
+          {% endif %}
+          {% if item.fallback_used and item.fallback_reason %}
+          <p class="muted">fallback 사유: {{ item.fallback_reason }}</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
 
     <section class="two-col">
       <div class="panel">

@@ -51,10 +51,11 @@ Current state:
 - Production stage changes now refresh the report
 - a real saved model (`model_id=665`) successfully passed `meta -> generate -> download(PDF)` after pinning a compatible `pydyf` version for the backend image
 - Finalize now surfaces a direct link to the refreshed report after Production stage changes and rollback
+- reports now embed representative analysis artifacts when the selected plot/XAI response can be rendered as a stable image payload
+- local fallback now keeps `finalize`, registry registration, and Production stage changes working even when the configured MLflow host is unreachable
 
 Next work:
 
-- validate the report flow immediately after a new `finalize` action in-session
 - decide whether report history needs DB-backed metadata
 - optionally add scheduled Production report refresh
 
@@ -66,10 +67,12 @@ Current state:
 
 - reports now include experiment, module, dataset, target, run id, metrics, hyperparameters, and setup summary
 - reports now also include KPI overview cards, workflow steps, dataset profile, compare/tune summary, and artifact inventory
+- reports now also include module-appropriate representative charts, currently verified on a saved regression model with `잔차 플롯` and `SHAP 요약`
+- a newly finalized regression model also passed `finalize -> register -> Production` with automatic report generation and Production report refresh in-session
 
 Next work:
 
-- include persisted analyze artifacts or plot snapshots when stable storage exists
+- expand report-safe chart coverage to more module types without making PDF generation brittle
 - add compare/tune summary blocks if they are worth preserving in the final report
 - improve styling and readability for longer hyperparameter tables
 
@@ -118,14 +121,14 @@ Next work:
 
 ## Recommended execution order
 
-1. Real-model smoke test for finalize -> report generation -> report download
-2. Production promotion smoke test for report refresh
-3. XAI path review against `interpret_model()` by estimator/module
-4. Persist analyze artifacts for report reuse
-5. Continue copy cleanup and UX polish
+1. XAI path review against `interpret_model()` by estimator/module
+2. Expand report-safe chart coverage and then persist analyze artifacts for report reuse
+3. Decide how `mlflow_synced` fallback state should surface in UI and docs
+4. Continue copy cleanup and UX polish
+5. Add more module-specific runtime validation, especially time-series and clustering
 
 ## Notes
 
 - No hard blocker is currently identified in code.
 - The largest remaining architectural gap is still the custom XAI layer for cases where PyCaret native interpretability is unavailable.
-- Report generation is connected, but it still needs full real-model runtime validation in this environment.
+- Report generation is connected, now includes representative chart artifacts, and new-model runtime validation is complete for a regression flow in this environment.

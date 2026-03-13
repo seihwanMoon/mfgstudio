@@ -1,6 +1,8 @@
+import socket
 import time
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 import mlflow
 import mlflow.sklearn
@@ -26,12 +28,33 @@ def _configure_tracking() -> None:
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
 
+def _tracking_server_healthcheck(timeout_seconds: float = 1.0) -> tuple[bool, str | None]:
+    parsed = urlparse(settings.mlflow_tracking_uri)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return True, None
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((parsed.hostname, port), timeout=timeout_seconds):
+            return True, None
+    except OSError as exc:
+        return False, str(exc)
+
+
+def _require_tracking_server() -> None:
+    reachable, error = _tracking_server_healthcheck()
+    if not reachable:
+        raise ConnectionError(f"MLflow tracking server is unreachable at {settings.mlflow_tracking_uri}: {error}")
+
+
 def get_client() -> MlflowClient:
     _configure_tracking()
     return MlflowClient()
 
 
 def close_active_runs(status: str = "FINISHED", limit: int = 10) -> list[str]:
+    reachable, _ = _tracking_server_healthcheck()
+    if not reachable:
+        return []
     _configure_tracking()
     closed_run_ids = []
     for _ in range(limit):
@@ -49,6 +72,9 @@ def terminate_recent_running_runs(
     keep_run_ids: set[str] | None = None,
     max_results: int = 100,
 ) -> list[str]:
+    reachable, _ = _tracking_server_healthcheck()
+    if not reachable:
+        return []
     client = get_client()
     keep_run_ids = keep_run_ids or set()
     terminated = []
@@ -76,6 +102,9 @@ def terminate_running_runs_by_name(
 ) -> list[str]:
     if not run_names:
         return []
+    reachable, _ = _tracking_server_healthcheck()
+    if not reachable:
+        return []
     client = get_client()
     terminated = []
     runs = client.search_runs(
@@ -95,6 +124,9 @@ def terminate_running_runs_by_name(
 
 
 def ensure_experiment(experiment_name: str) -> str:
+    reachable, _ = _tracking_server_healthcheck()
+    if not reachable:
+        return experiment_name
     client = get_client()
     experiment = client.get_experiment_by_name(experiment_name)
     if experiment:
@@ -104,6 +136,9 @@ def ensure_experiment(experiment_name: str) -> str:
 
 def get_mlflow_status() -> dict:
     try:
+        reachable, error = _tracking_server_healthcheck()
+        if not reachable:
+            raise ConnectionError(error)
         client = get_client()
         experiments = client.search_experiments()
         models = list(client.search_registered_models())
@@ -264,27 +299,40 @@ def log_sklearn_model_run(
     tags: dict[str, Any] | None = None,
     input_example: Any = None,
 ) -> dict:
-    _configure_tracking()
-    experiment_id = ensure_experiment(experiment_name)
-    close_active_runs()
-    with mlflow.start_run(
-        experiment_id=experiment_id,
-        run_name=run_name,
-        nested=False,
-    ) as run:
-        if tags:
-            mlflow.set_tags({key: str(value) for key, value in tags.items() if value is not None})
-        payload_params = _jsonable_params(params)
-        payload_metrics = _jsonable_metrics(metrics)
-        if payload_params:
-            mlflow.log_params(payload_params)
-        if payload_metrics:
-            mlflow.log_metrics(payload_metrics)
-        mlflow.sklearn.log_model(model, artifact_path="model", input_example=input_example)
-    current = get_client().get_run(run.info.run_id)
-    if current.info.status == "RUNNING":
-        get_client().set_terminated(run.info.run_id, status="FINISHED")
-    return {"run_id": run.info.run_id, "experiment_id": experiment_id}
+    try:
+        _configure_tracking()
+        experiment_id = ensure_experiment(experiment_name)
+        close_active_runs()
+        with mlflow.start_run(
+            experiment_id=experiment_id,
+            run_name=run_name,
+            nested=False,
+        ) as run:
+            if tags:
+                mlflow.set_tags({key: str(value) for key, value in tags.items() if value is not None})
+            payload_params = _jsonable_params(params)
+            payload_metrics = _jsonable_metrics(metrics)
+            if payload_params:
+                mlflow.log_params(payload_params)
+            if payload_metrics:
+                mlflow.log_metrics(payload_metrics)
+            mlflow.sklearn.log_model(model, artifact_path="model", input_example=input_example)
+        current = get_client().get_run(run.info.run_id)
+        if current.info.status == "RUNNING":
+            get_client().set_terminated(run.info.run_id, status="FINISHED")
+        return {
+            "run_id": run.info.run_id,
+            "experiment_id": experiment_id,
+            "mlflow_synced": True,
+            "mlflow_error": None,
+        }
+    except Exception as exc:
+        return {
+            "run_id": f"local-{int(time.time() * 1000)}",
+            "experiment_id": experiment_name,
+            "mlflow_synced": False,
+            "mlflow_error": str(exc),
+        }
 
 
 def _wait_for_model_version(model_name: str, version: int, timeout_seconds: int = 30) -> None:
@@ -300,6 +348,7 @@ def _wait_for_model_version(model_name: str, version: int, timeout_seconds: int 
 
 
 def register_run_model(model_name: str, run_id: str, description: str = "") -> dict:
+    _require_tracking_server()
     client = get_client()
     try:
         client.get_registered_model(model_name)
@@ -314,6 +363,7 @@ def register_run_model(model_name: str, run_id: str, description: str = "") -> d
 
 
 def transition_model_stage(model_name: str, version: int, stage: str) -> dict:
+    _require_tracking_server()
     client = get_client()
     archive_existing = stage == "Production"
     client.transition_model_version_stage(
@@ -327,6 +377,7 @@ def transition_model_stage(model_name: str, version: int, stage: str) -> dict:
 
 
 def delete_model_version(model_name: str, version: int) -> dict:
+    _require_tracking_server()
     client = get_client()
     client.delete_model_version(name=model_name, version=str(version))
     remaining = client.search_model_versions(f"name='{model_name}'")
@@ -344,6 +395,7 @@ def delete_model_version(model_name: str, version: int) -> dict:
 
 
 def get_registered_versions(model_name: str) -> list[dict]:
+    _require_tracking_server()
     client = get_client()
     versions = client.search_model_versions(f"name='{model_name}'")
     payload = []

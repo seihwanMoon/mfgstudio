@@ -19,6 +19,10 @@ All planned tasks are currently complete.
 
 ## Recent Updates
 
+- 2026-03-13: hardened MLflow integration so `finalize`, registry registration, and Production stage changes degrade to local fallback metadata instead of failing when the configured tracking host is unreachable.
+- 2026-03-13: completed a real in-session smoke test for `finalize -> register -> Production`, verifying automatic report generation and Production report refresh for a newly finalized regression model (`model_id=679`).
+- 2026-03-13: report generation now embeds representative analysis artifacts in the PDF by reusing PyCaret/app plots when an image payload is available.
+- 2026-03-13: validated enriched report chart rendering with a real saved regression model (`model_id=665`); the regenerated PDF now includes `잔차 플롯` and `SHAP 요약` sections.
 - 2026-03-13: expanded Korean UI cleanup across Tune, Finalize, MLflow, dashboard detail cards, and remaining shared navigation/layout surfaces.
 - 2026-03-13: added native-first `interpret_model()` attempts for XAI `summary`, `dependence`, and `pfi`, while preserving explicit custom fallback responses when PyCaret native output is unavailable.
 - 2026-03-13: rebuilt and revalidated Docker frontend/backend after localization and XAI changes; `/api/analyze/plot` now returns `200` again for repaired XAI requests.

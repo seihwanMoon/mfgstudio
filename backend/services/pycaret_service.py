@@ -2241,6 +2241,8 @@ def finalize_model_real(experiment_id: int, algorithm: str, model_name: str, met
         "final_metrics": metrics or {},
         "run_id": run_info["run_id"],
         "mlflow_experiment_id": run_info["experiment_id"],
+        "mlflow_synced": run_info.get("mlflow_synced", True),
+        "mlflow_error": run_info.get("mlflow_error"),
     }
 
 

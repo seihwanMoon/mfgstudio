@@ -448,6 +448,8 @@ def finalize_model(model_id: int, db: Session = Depends(get_db)):
         "model_path": model.model_path,
         "final_metrics": result["final_metrics"],
         "run_id": result["run_id"],
+        "mlflow_synced": result.get("mlflow_synced", True),
+        "mlflow_error": result.get("mlflow_error"),
         **report_payload,
     }
 

@@ -8,6 +8,7 @@ from config import settings
 from models.dataset import Dataset
 from models.experiment import Experiment
 from models.trained_model import TrainedModel
+from services.pycaret_service import EXPERIMENT_CONTEXTS, ensure_experiment_context, get_interpret_plot, get_plot
 
 
 TEMPLATE_ENV = Environment(
@@ -37,6 +38,27 @@ METRIC_PRIORITY = {
     "clustering": ["Silhouette", "Calinski-Harabasz", "Davies-Bouldin"],
     "anomaly": ["AUC", "Recall", "Precision"],
     "timeseries": ["MAE", "RMSE", "MAPE", "SMAPE"],
+}
+
+REPORT_CHART_SPECS = {
+    "classification": [
+        {"family": "plot", "key": "feature", "title": "변수 중요도", "caption": "모델 진단 기준의 대표 변수 중요도입니다."},
+        {"family": "xai", "key": "summary", "title": "SHAP 요약", "caption": "예측에 큰 영향을 준 상위 feature를 요약합니다."},
+    ],
+    "regression": [
+        {"family": "plot", "key": "residuals", "title": "잔차 플롯", "caption": "예측 오차 패턴이 안정적인지 확인합니다."},
+        {"family": "xai", "key": "summary", "title": "SHAP 요약", "caption": "예측값 변화에 기여한 상위 feature를 요약합니다."},
+    ],
+    "clustering": [
+        {"family": "plot", "key": "cluster", "title": "클러스터 분포", "caption": "클러스터 분리 상태를 2D 투영으로 보여줍니다."},
+    ],
+    "anomaly": [
+        {"family": "plot", "key": "tsne", "title": "이상치 임베딩", "caption": "정상/이상 패턴의 분포를 임베딩으로 확인합니다."},
+    ],
+    "timeseries": [
+        {"family": "plot", "key": "acf", "title": "ACF", "caption": "시계열 자기상관 구조를 요약합니다."},
+        {"family": "plot", "key": "pacf", "title": "PACF", "caption": "부분 자기상관 구조를 요약합니다."},
+    ],
 }
 
 
@@ -293,6 +315,75 @@ def _build_summary_lines(model: TrainedModel, experiment: Experiment | None, dat
     return lines
 
 
+def _report_family_label(family: str) -> str:
+    if family == "xai":
+        return "XAI"
+    return "진단 그래프"
+
+
+def _build_report_chart_item(spec: dict, payload: dict) -> dict | None:
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("render_mode") != "image":
+        return None
+    image_base64 = payload.get("base64_image")
+    if not image_base64:
+        return None
+    return {
+        "title": spec["title"],
+        "caption": spec.get("caption"),
+        "family": spec["family"],
+        "family_label": _report_family_label(spec["family"]),
+        "image_data_url": f"data:image/png;base64,{image_base64}",
+        "native_source": payload.get("native_source") or "-",
+        "fallback_used": bool(payload.get("fallback_used")),
+        "native_reason": payload.get("native_reason"),
+        "fallback_reason": payload.get("fallback_reason"),
+    }
+
+
+def _build_report_charts(
+    model: TrainedModel,
+    experiment: Experiment | None,
+    dataset: Dataset | None,
+) -> list[dict]:
+    if not experiment or not dataset or not dataset.stored_path:
+        return []
+
+    module_type = experiment.module_type or ""
+    chart_specs = REPORT_CHART_SPECS.get(module_type, [])
+    if not chart_specs:
+        return []
+
+    params = _safe_json_loads(experiment.setup_params, {})
+    active_context = EXPERIMENT_CONTEXTS.get(experiment.id)
+    if not active_context or active_context.get("pc") is None:
+        try:
+            ensure_experiment_context(
+                experiment_id=experiment.id,
+                dataset_path=dataset.stored_path,
+                module_type=module_type,
+                params=params,
+                experiment_name=experiment.mlflow_exp_name or experiment.name,
+            )
+        except Exception:
+            return []
+
+    charts: list[dict] = []
+    for spec in chart_specs:
+        try:
+            if spec["family"] == "xai":
+                payload = get_interpret_plot(experiment.id, model.algorithm, spec["key"])
+            else:
+                payload = get_plot(experiment.id, model.algorithm, spec["key"])
+            chart_item = _build_report_chart_item(spec, payload)
+            if chart_item:
+                charts.append(chart_item)
+        except Exception:
+            continue
+    return charts
+
+
 def build_report_context(
     model: TrainedModel,
     experiment: Experiment | None = None,
@@ -310,6 +401,7 @@ def build_report_context(
     tune_summary = _build_tune_summary(model, context_meta)
     artifact_rows = _build_artifact_rows(model, model.experiment_id)
     summary_lines = _build_summary_lines(model, experiment, dataset, context_meta)
+    report_charts = _build_report_charts(model, experiment, dataset)
 
     overview_cards = [
         {"label": "모듈", "value": _module_label(experiment.module_type if experiment else None)},
@@ -350,6 +442,7 @@ def build_report_context(
         "compare_summary": compare_summary,
         "tune_summary": tune_summary,
         "artifact_rows": artifact_rows,
+        "report_charts": report_charts,
         "model_path": model.model_path,
         "report_path": str(resolve_report_path(model)),
     }

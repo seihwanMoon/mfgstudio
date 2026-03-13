@@ -35,6 +35,8 @@ Latest completed work:
 - Setup basic/preprocessing forms and upload preview/quality/type tables were also normalized to Korean
 - Plots/XAI workspace copy, source-path badges, SHAP helper text, and train/test toggle labels were also normalized to Korean
 - XAI plots now include explicit `native_reason` / `fallback_reason` metadata, and experiment activation now falls back to setup rebuild if saved PyCaret experiment pickle restore fails
+- PDF reports now embed representative analysis artifacts when a report-safe image payload is available, starting with module-appropriate plots such as residual diagnostics and SHAP summary charts
+- MLflow-dependent finalize/registry flows now fall back to local metadata quickly when the configured tracking host is unreachable, instead of blocking or failing the product flow
 
 ## Current working tree
 
@@ -92,7 +94,11 @@ Main files touched in the latest cycle:
   - `GET /api/report/665/meta` returns `200`
   - `POST /api/report/665/generate` returns `200`
   - `GET /api/report/665` returns `200` with `application/pdf`
+  - `build_report_context(model_id=665)` now returns `report_charts=2` (`잔차 플롯`, `SHAP 요약`) for the saved regression model smoke test
   - regenerated enriched PDF for `model_id=665`; response size increased to roughly `100 KB`, confirming the richer template is being used
+  - `POST /api/train/finalize/679` returns `200` with `report_generated=True`, `report_exists=True`, and `mlflow_synced=False` when the configured MLflow host is unreachable
+  - `POST /api/registry/register` returns `200` for that newly finalized model using DB-backed fallback versioning when MLflow is unreachable
+  - `PUT /api/registry/{model_name}/stage` returns `200` and refreshes the Production report for the same newly finalized model
   - `GET /api/ops/experiments` returns `200`
   - `GET /api/ops/reports` returns `200`
   - `GET /api/ops/models/{model_id}/retire-preview` returns `200`
@@ -106,16 +112,16 @@ Main files touched in the latest cycle:
 Runtime caveat:
 
 - native `interpret_model()` still falls back for some estimators or environments because PyCaret restricts certain plots and `pfi` depends on `interpret_community`
-- the report flow was validated against an existing saved model, but `finalize -> auto-generate` still should be rechecked once a newly finalized model is created in this session
+- finalize/report/Production refresh is now validated for a newly finalized regression model in-session, but additional coverage for time-series and clustering should still be added
 - retirement endpoints were validated non-destructively; no real registered version or finalized artifact was retired during verification in this session
 
 ## Current focus
 
 1. Continue reducing custom XAI behavior where `interpret_model()` is viable.
-2. Smoke-test `finalize -> report generate -> report download -> Production refresh` with a newly finalized model in-session.
+2. Expand report-safe chart coverage to more module types, especially time-series and clustering, without making PDF generation brittle.
 3. Keep fallback paths explicit and visible in API responses and UI.
-4. Enrich reports with persisted analyze artifacts or static plot snapshots after artifact storage is stabilized.
-5. Clean up the last mixed-language and mojibake UI copy outside the refreshed high-traffic flows.
+4. Clean up the last mixed-language and mojibake UI copy outside the refreshed high-traffic flows.
+5. Decide whether report history and MLflow fallback state should become first-class UI metadata.
 
 ## Recommended next steps
 
@@ -123,7 +129,7 @@ Runtime caveat:
 2. Run a fresh classification or regression experiment through `finalize`.
 3. Confirm the generated PDF opens from both the Finalize screen and `MLflow > 운영 관리`.
 4. Promote the model to `Production` and verify report refresh on stage change.
-5. Decide which XAI options can realistically move to `interpret_model()` next.
+5. Decide which additional module-specific charts should be persisted for report reuse next.
 
 ## Useful commands
 
