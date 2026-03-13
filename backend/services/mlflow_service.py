@@ -326,6 +326,23 @@ def transition_model_stage(model_name: str, version: int, stage: str) -> dict:
     return {"name": model_name, "version": int(current.version), "stage": current.current_stage}
 
 
+def delete_model_version(model_name: str, version: int) -> dict:
+    client = get_client()
+    client.delete_model_version(name=model_name, version=str(version))
+    remaining = client.search_model_versions(f"name='{model_name}'")
+    remaining_versions = [int(item.version) for item in remaining if item.version is not None]
+    if not remaining_versions:
+        try:
+            client.delete_registered_model(model_name)
+        except Exception:
+            pass
+    return {
+        "name": model_name,
+        "deleted_version": int(version),
+        "remaining_versions": sorted(remaining_versions, reverse=True),
+    }
+
+
 def get_registered_versions(model_name: str) -> list[dict]:
     client = get_client()
     versions = client.search_model_versions(f"name='{model_name}'")

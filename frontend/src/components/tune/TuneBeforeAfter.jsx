@@ -31,8 +31,8 @@ export default function TuneBeforeAfter({ result }) {
         }}
       >
         <span>지표</span>
-        <span>Before</span>
-        <span>After</span>
+        <span>튜닝 전</span>
+        <span>튜닝 후</span>
       </div>
       {keys.map((key) => (
         <div

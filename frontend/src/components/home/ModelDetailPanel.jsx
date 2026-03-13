@@ -15,8 +15,8 @@ export default function ModelDetailPanel({ model }) {
     <div style={{ border: "1px solid var(--border)", borderRadius: 16, background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)", padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
         <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-          <Badge color="#34D399">{model.stage || "None"}</Badge>
-          <Badge color="#4A9DFF">{model.algorithm || "Unknown"}</Badge>
+          <Badge color="#34D399">{model.stage || "미지정"}</Badge>
+          <Badge color="#4A9DFF">{model.algorithm || "알 수 없음"}</Badge>
         </div>
         <div style={{ color: "var(--text-primary)", fontSize: 22, fontWeight: 800 }}>{model.mlflow_model_name || "등록 전 모델"}</div>
       </div>

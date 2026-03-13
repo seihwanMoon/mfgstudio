@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from database import init_db
-from routers import analyze, dashboard, data, drift, mlflow as mlflow_router, predict, registry, report, schedule, train
+from routers import analyze, dashboard, data, drift, mlflow as mlflow_router, ops, predict, registry, report, schedule, train
 from services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -51,6 +51,7 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(drift.router, prefix="/api/drift", tags=["drift"])
 app.include_router(schedule.router, prefix="/api/schedule", tags=["schedule"])
 app.include_router(report.router, prefix="/api/report", tags=["report"])
+app.include_router(ops.router, prefix="/api/ops", tags=["ops"])
 
 
 @app.get("/health")

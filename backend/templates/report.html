@@ -1,32 +1,122 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="utf-8" />
     <title>{{ title }}</title>
     <style>
+      @page {
+        size: A4;
+        margin: 18mm 14mm;
+      }
+
       body {
-        font-family: Arial, sans-serif;
+        font-family: "NanumGothic", "Nanum Gothic", Arial, sans-serif;
         color: #10233a;
-        margin: 32px;
+        font-size: 11px;
+        line-height: 1.5;
       }
 
       h1,
-      h2 {
-        margin-bottom: 8px;
+      h2,
+      p {
+        margin: 0;
       }
 
-      .meta,
-      .card {
-        border: 1px solid #d7e3f1;
-        border-radius: 12px;
-        padding: 16px;
+      .hero {
+        padding: 22px 24px;
+        border-radius: 18px;
+        color: #ffffff;
+        background: linear-gradient(135deg, #0f3e72 0%, #1f7ad3 52%, #57c2ff 100%);
+        margin-bottom: 18px;
+      }
+
+      .hero-subtitle {
+        opacity: 0.88;
+        margin-top: 6px;
+      }
+
+      .meta-grid,
+      .card-grid,
+      .two-col {
+        display: grid;
+        gap: 10px;
+      }
+
+      .meta-grid {
+        grid-template-columns: repeat(4, 1fr);
+        margin-top: 16px;
+      }
+
+      .card-grid {
+        grid-template-columns: repeat(4, 1fr);
         margin-bottom: 16px;
       }
 
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
+      .two-col {
+        grid-template-columns: 1.2fr 1fr;
+        margin-bottom: 16px;
+      }
+
+      .panel {
+        border: 1px solid #d9e7f4;
+        border-radius: 14px;
+        background: #ffffff;
+        padding: 14px 16px;
+        margin-bottom: 14px;
+      }
+
+      .panel-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 10px;
+      }
+
+      .mini {
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+
+      .kpi {
+        border: 1px solid #d9e7f4;
+        border-radius: 14px;
+        background: #f7fbff;
+        padding: 12px;
+      }
+
+      .label {
+        font-size: 10px;
+        color: #64748b;
+        margin-bottom: 4px;
+      }
+
+      .value {
+        font-size: 16px;
+        font-weight: 700;
+        color: #10233a;
+      }
+
+      .summary-list {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .chip {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: #eaf4ff;
+        border: 1px solid #cde2f7;
+        color: #0f3e72;
+        font-size: 10px;
+        font-weight: 700;
       }
 
       table {
@@ -37,76 +127,307 @@
       th,
       td {
         text-align: left;
-        padding: 8px 10px;
-        border-bottom: 1px solid #e6eef8;
+        padding: 7px 8px;
+        border-bottom: 1px solid #e8eff6;
+        vertical-align: top;
       }
 
       th {
-        background: #f2f7fc;
+        background: #f3f8fc;
+        color: #334155;
+        font-size: 10px;
+      }
+
+      .muted {
+        color: #64748b;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .ok {
+        background: #e8fff5;
+        color: #0f8a55;
+      }
+
+      .warn {
+        background: #fff7e8;
+        color: #b7791f;
+      }
+
+      .section-break {
+        margin-top: 8px;
       }
     </style>
   </head>
   <body>
-    <h1>{{ model_name }}</h1>
-    <div class="meta">
-      <div>Algorithm: {{ algorithm }}</div>
-      <div>Version: {{ version or "-" }}</div>
-      <div>Stage: {{ stage or "-" }}</div>
-      <div>Generated At: {{ generated_at or "-" }}</div>
-    </div>
-
-    <div class="grid">
-      <div class="card">
-        <h2>Operations</h2>
-        <div>Drift Score: {{ drift_score }}</div>
-        <div>Predictions Today: {{ pred_count_today }}</div>
-        <div>Predictions Total: {{ pred_count_total }}</div>
+    <section class="hero">
+      <h1>{{ model_name }}</h1>
+      <p class="hero-subtitle">{{ title }}</p>
+      <div class="meta-grid">
+        <div class="mini">
+          <div class="label" style="color: rgba(255,255,255,0.72)">실험명</div>
+          <div>{{ experiment_name or "-" }}</div>
+        </div>
+        <div class="mini">
+          <div class="label" style="color: rgba(255,255,255,0.72)">모듈</div>
+          <div>{{ module_type }}</div>
+        </div>
+        <div class="mini">
+          <div class="label" style="color: rgba(255,255,255,0.72)">버전 / 스테이지</div>
+          <div>{{ version }} / {{ stage }}</div>
+        </div>
+        <div class="mini">
+          <div class="label" style="color: rgba(255,255,255,0.72)">생성 시각</div>
+          <div>{{ generated_at }}</div>
+        </div>
       </div>
-      <div class="card">
-        <h2>Metrics</h2>
+    </section>
+
+    <section class="card-grid">
+      {% for item in overview_cards %}
+      <div class="kpi">
+        <div class="label">{{ item.label }}</div>
+        <div class="value">{{ item.value }}</div>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">한눈에 보기</div>
+      <ul class="summary-list">
+        {% for line in summary_lines %}
+        <li>{{ line }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="two-col">
+      <div class="panel">
+        <div class="panel-title">핵심 성능 지표</div>
+        <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 0">
+          {% for item in metric_highlights %}
+          <div class="kpi">
+            <div class="label">{{ item.label }}</div>
+            <div class="value">{{ item.value }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">학습 흐름</div>
+        <div class="chip-row">
+          {% for step in workflow_steps %}
+          <span class="chip">{{ step }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="two-col">
+      <div class="panel">
+        <div class="panel-title">데이터셋 개요</div>
+        <table>
+          <tbody>
+            <tr>
+              <th>데이터셋</th>
+              <td>{{ dataset_name or "-" }}</td>
+            </tr>
+            <tr>
+              <th>행 / 열</th>
+              <td>{{ dataset_rows }} / {{ dataset_cols }}</td>
+            </tr>
+            <tr>
+              <th>타깃 컬럼</th>
+              <td>{{ target_col or "-" }}</td>
+            </tr>
+            <tr>
+              <th>타깃 타입</th>
+              <td>{{ target_meta.type or "-" }}</td>
+            </tr>
+            <tr>
+              <th>타깃 결측치</th>
+              <td>{{ target_meta.missing }}</td>
+            </tr>
+            <tr>
+              <th>타깃 고유값</th>
+              <td>{{ target_meta.unique }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="section-break"></div>
+        <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 0">
+          {% for item in dataset_stats %}
+          <div class="kpi">
+            <div class="label">{{ item.label }}</div>
+            <div class="value">{{ item.value }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">컬럼 미리보기</div>
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Value</th>
+              <th>컬럼명</th>
+              <th>타입</th>
+              <th>결측치</th>
+              <th>고유값</th>
             </tr>
           </thead>
           <tbody>
-            {% for key, value in metrics.items() %}
+            {% for item in dataset_columns %}
             <tr>
-              <td>{{ key }}</td>
-              <td>{{ value }}</td>
+              <td>{{ item.name }}{% if item.is_target %} <span class="badge ok">target</span>{% endif %}</td>
+              <td>{{ item.type }}</td>
+              <td>{{ item.missing }}</td>
+              <td>{{ item.unique }}</td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
 
-    <div class="card">
-      <h2>Hyperparameters</h2>
+    <section class="two-col">
+      <div class="panel">
+        <div class="panel-title">설정 요약</div>
+        <table>
+          <thead>
+            <tr>
+              <th>항목</th>
+              <th>값</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if setup_summary %}
+              {% for item in setup_summary %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.value }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="2">저장된 설정 요약이 없습니다.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="panel-title">비교 / 튜닝 요약</div>
+        <table>
+          <thead>
+            <tr>
+              <th>비교 항목</th>
+              <th>값</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in compare_summary %}
+            <tr>
+              <td>{{ item.label }}</td>
+              <td>{{ item.value }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="section-break"></div>
+        <table>
+          <thead>
+            <tr>
+              <th>튜닝 항목</th>
+              <th>값</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in tune_summary %}
+            <tr>
+              <td>{{ item.label }}</td>
+              <td>{{ item.value }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">전체 성능 지표</div>
       <table>
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Value</th>
+            <th>항목</th>
+            <th>값</th>
           </tr>
         </thead>
         <tbody>
-          {% if hyperparams %}
-            {% for key, value in hyperparams.items() %}
-            <tr>
-              <td>{{ key }}</td>
-              <td>{{ value }}</td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="2">No hyperparameter diff recorded.</td>
-            </tr>
-          {% endif %}
+          {% for item in metrics %}
+          <tr>
+            <td>{{ item.label }}</td>
+            <td>{{ item.value }}</td>
+          </tr>
+          {% endfor %}
         </tbody>
       </table>
-    </div>
+    </section>
+
+    <section class="two-col">
+      <div class="panel">
+        <div class="panel-title">하이퍼파라미터 변화</div>
+        <table>
+          <thead>
+            <tr>
+              <th>항목</th>
+              <th>값</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if hyperparams %}
+              {% for item in hyperparams %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.value }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="2">기록된 하이퍼파라미터 차이가 없습니다.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="panel-title">산출물 현황</div>
+        <table>
+          <thead>
+            <tr>
+              <th>항목</th>
+              <th>경로</th>
+              <th>상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in artifact_rows %}
+            <tr>
+              <td>{{ item.label }}</td>
+              <td class="muted">{{ item.value }}</td>
+              <td>
+                <span class="badge {% if item.status == '확인됨' %}ok{% else %}warn{% endif %}">{{ item.status }}</span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
   </body>
 </html>

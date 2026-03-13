@@ -4,9 +4,9 @@ Last updated: 2026-03-13
 
 ## Goal
 
-다음 단계의 목표는 기능 추가보다 “PyCaret 원형과의 정합성”과 “운영 제품성”을 높이는 것입니다.
+The next implementation cycle is focused on tightening alignment with PyCaret-native workflows while turning reports into durable operating artifacts.
 
-기준 흐름:
+Core workflow target:
 
 1. `setup()`
 2. `compare_models()`
@@ -14,97 +14,108 @@ Last updated: 2026-03-13
 4. `blend_models()` / `stack_models()` / `automl()`
 5. `plot_model()` / `interpret_model()` / `dashboard()`
 6. `finalize_model()`
-7. registry / predict / monitoring
+7. registry / predict / monitoring / reports
 
 ## Priority roadmap
 
-### P1. Time-Series Visualization Polish
+### P1. Analyze / XAI Native-First Cleanup
 
 Status: In Progress
 
-현재 상태:
+Current state:
 
-- 시계열 `forecast / residuals / acf / pacf`는 동작
-- `forecast`는 PyCaret native plotly figure로 전환
-- `residuals`는 residual-only chart로 보정
+- analyze payloads now return `native_source` and `fallback_used`
+- plot catalog entries now label native-first vs fallback intent
+- time-series forecast / acf / pacf already prefer native plotly output
+- residuals still uses an explicit fallback path for clarity
+- diagnostic plots now live under a dedicated `Plots` route
+- explanation work now lives under a dedicated `XAI` route
+- custom SHAP paths were repaired for PyCaret pipeline models by using transformed numeric frames with the final estimator
+- `summary`, `dependence`, and `pfi` now attempt `interpret_model()` first and return custom fallback output only when PyCaret native output is not available
 
-남은 작업:
+Next work:
 
-- forecast horizon 선택 UI 제공 여부 결정
-- 시계열 `Train/Test` 토글을 forecasting 의미에 맞게 더 명확히 표현
-- PyCaret 튜토리얼 예시와 비교해 정보 밀도와 설명 문구 추가
+- measure which estimator/module combinations can reliably stay on native `interpret_model()` output
+- reduce custom-only logic where PyCaret native output is acceptable
+- keep misleading native plots overridden only when there is a clear UX reason
 
-### P2. Analyze / XAI Enhancement
-
-Status: In Progress
-
-현재 상태:
-
-- 진단 플롯과 XAI 플롯이 분리됨
-- XAI는 `summary`, `dependence`, `pfi` 지원
-
-남은 작업:
-
-- richer XAI variants 추가 검토
-- PyCaret native explainability 범위와 현재 구현 차이 문서화
-- 회귀/분류 화면의 XAI 결과 해석 문구 보강
-
-### P3. Advanced Candidate UX
+### P2. Automatic Report Lifecycle
 
 Status: In Progress
 
-현재 상태:
+Current state:
 
-- `blend_models()`, `stack_models()`, `automl()`
-- `calibrate_model()`, `optimize_threshold()`
-- 후보 메타데이터 일부 노출
+- finalize now generates a PDF automatically
+- report service now resolves reusable report artifact paths
+- report API now supports metadata lookup and explicit regeneration
+- Production stage changes now refresh the report
+- a real saved model (`model_id=665`) successfully passed `meta -> generate -> download(PDF)` after pinning a compatible `pydyf` version for the backend image
 
-남은 작업:
+Next work:
 
-- Compare / Tune / Finalize 화면에서 advanced candidate 구분 강화
-- `operation`, `members`, `resolved_model_name`, threshold/candidate 특성을 더 명확히 표시
-- 최종 추천 로직과 후보 표시 기준 정리
+- validate the report flow immediately after a new `finalize` action in-session
+- decide whether report history needs DB-backed metadata
+- optionally add scheduled Production report refresh
 
-### P4. MLflow Ops View Refinement
-
-Status: In Progress
-
-현재 상태:
-
-- 실제 MLflow experiment / run / registry 연동
-- app-side MLflow 화면 정리 완료
-
-남은 작업:
-
-- 실험 로그 필터링 고도화
-- 최종 모델과 후보 모델의 MLflow run 관계 더 명확히 노출
-- 앱 내부 비교 화면과 MLflow 비교 화면 간 연결 강화
-
-### P5. Copy / Localization Cleanup
+### P3. Report Content Enrichment
 
 Status: In Progress
 
-현재 상태:
+Current state:
 
-- 다수 mojibake는 정리됨
-- 일부 화면은 generic tabular 용어가 남아 있음
+- reports now include experiment, module, dataset, target, run id, metrics, hyperparameters, and setup summary
+- reports now also include KPI overview cards, workflow steps, dataset profile, compare/tune summary, and artifact inventory
 
-남은 작업:
+Next work:
 
-- 시계열 전용 문구 정리
-- Tune / Analyze / Finalize 설명 문구 재점검
-- 사용자 안내 문구를 PyCaret 개념과 일치시키기
+- include persisted analyze artifacts or plot snapshots when stable storage exists
+- add compare/tune summary blocks if they are worth preserving in the final report
+- improve styling and readability for longer hyperparameter tables
 
-## Execution order for the next session
+### P4. UI Copy / Localization Cleanup
 
-1. 시계열 Analyze 화면 UX 정리
-2. XAI 확장 또는 해석 문구 보강
-3. advanced candidate UX 정리
-4. MLflow ops view 추가 정제
-5. 남은 mixed-language / generic wording cleanup
+Status: In Progress
+
+Current state:
+
+- the app shell, sidebar, header, and the new `Plots` / `XAI` screens are now back in Korean
+- Tune, Finalize, MLflow, and several dashboard/detail panels were also re-localized to Korean
+- compare leaderboard, MLflow registry/schedule panels, and the PDF report template were also normalized to Korean
+- mixed-language and mojibake strings may still exist in lower-traffic or not-yet-revisited components
+
+Next work:
+
+- scan remaining pages/components for leftover English labels or mojibake
+- keep Korean as the default product UI language unless there is an explicit requirement to support dual-language UI
+- remove mojibake before deeper UX polish
+
+### P5. Production Ops Refinement
+
+Status: In Progress
+
+Current state:
+
+- MLflow registry flows and report refresh hooks are now connected
+- `MLflow > 운영 관리` now exposes experiment archive/delete safety checks and report lifecycle controls
+- registered/finalized models can now enter a retirement workflow before an experiment becomes deletable
+
+Next work:
+
+- surface report refresh results in Production management UI if needed
+- tighten the link between Production version, MLflow version, and generated report
+- consider adding search/filter controls for large experiment and report lists
+- consider a second confirmation / dry-run preview for retirement when destructive cleanup is possible
+
+## Recommended execution order
+
+1. Real-model smoke test for finalize -> report generation -> report download
+2. Production promotion smoke test for report refresh
+3. XAI path review against `interpret_model()` by estimator/module
+4. Persist analyze artifacts for report reuse
+5. Continue copy cleanup and UX polish
 
 ## Notes
 
-- 현재 샘플 기준 blocker는 없음
-- 시계열은 이제 기능적으로 동작하므로 다음 단계는 안정화보다 해석성과 UX 개선
-- 브라우저의 `chrome-extension://... postMessage` 오류는 계속 확장 프로그램 노이즈로 간주
+- No hard blocker is currently identified in code.
+- The largest remaining architectural gap is still the custom XAI layer for cases where PyCaret native interpretability is unavailable.
+- Report generation is connected, but it still needs full real-model runtime validation in this environment.

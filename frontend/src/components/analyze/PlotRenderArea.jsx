@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react"
 function getModeLabel(moduleType) {
   if (moduleType === "regression") return "회귀"
   if (moduleType === "classification") return "분류"
-  if (moduleType === "clustering") return "클러스터링"
+  if (moduleType === "clustering") return "군집"
   if (moduleType === "anomaly") return "이상탐지"
   if (moduleType === "timeseries") return "시계열"
   return moduleType
@@ -76,6 +76,27 @@ function PlotlyFigure({ figureJson }) {
   return <div ref={containerRef} style={{ width: "100%", minHeight: 520 }} />
 }
 
+function SourceBadge({ fallbackUsed }) {
+  const color = fallbackUsed ? "var(--warning)" : "var(--success)"
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "4px 8px",
+        borderRadius: 999,
+        border: `1px solid ${color}55`,
+        background: `${color}18`,
+        color,
+        fontSize: 11,
+        fontWeight: 800,
+      }}
+    >
+      {fallbackUsed ? "대체 경로" : "기본 경로"}
+    </span>
+  )
+}
+
 export default function PlotRenderArea({
   image,
   figureJson,
@@ -84,9 +105,12 @@ export default function PlotRenderArea({
   plotLabel,
   plotFamily,
   moduleType,
+  nativeSource,
+  fallbackUsed,
+  sourcePreference,
 }) {
   const modeLabel = getModeLabel(moduleType)
-  const familyLabel = plotFamily === "xai" ? "XAI" : "모델 진단"
+  const familyLabel = plotFamily === "xai" ? "XAI" : "진단 그래프"
 
   return (
     <div
@@ -98,11 +122,24 @@ export default function PlotRenderArea({
         padding: 16,
         minHeight: 420,
         display: "grid",
-        placeItems: "center",
+        gap: 14,
+        alignContent: "start",
       }}
     >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gap: 4 }}>
+          <div style={{ color: "var(--text-primary)", fontWeight: 800 }}>{plotLabel || "분석 그래프"}</div>
+          <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
+            {modeLabel} / {familyLabel} / 선호 경로: {sourcePreference === "native" ? "기본 경로 우선" : sourcePreference === "fallback" ? "대체 경로" : "알 수 없음"} / 실제 경로: {nativeSource || "알 수 없음"}
+          </div>
+        </div>
+        <SourceBadge fallbackUsed={Boolean(fallbackUsed)} />
+      </div>
+
       {isLoading ? (
-        <div style={{ color: "var(--text-secondary)" }}>플롯을 생성하는 중입니다...</div>
+        <div style={{ color: "var(--text-secondary)", minHeight: 520, display: "grid", placeItems: "center" }}>
+          그래프 생성 중...
+        </div>
       ) : renderMode === "plotly" && figureJson ? (
         <div style={{ width: "100%" }}>
           <PlotlyFigure figureJson={figureJson} />
@@ -110,10 +147,8 @@ export default function PlotRenderArea({
       ) : image ? (
         <img alt="analysis plot" src={`data:image/png;base64,${image}`} style={{ width: "100%", borderRadius: 10 }} />
       ) : (
-        <div style={{ color: "var(--text-secondary)", textAlign: "center", lineHeight: 1.7 }}>
-          아직 생성된 플롯이 없습니다.
-          <br />
-          현재 실험 유형은 {modeLabel}이고, 선택한 항목은 {plotLabel || "없음"} ({familyLabel}) 입니다.
+        <div style={{ color: "var(--text-secondary)", textAlign: "center", lineHeight: 1.7, minHeight: 520, display: "grid", placeItems: "center" }}>
+          아직 생성된 그래프가 없습니다.
         </div>
       )}
     </div>

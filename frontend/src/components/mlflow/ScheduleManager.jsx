@@ -1,7 +1,7 @@
 import { formatDateTimeKST } from "../../utils/formatters"
 
 const JOB_LABELS = {
-  retrain_candidate_scan: "재학습 후보 스캔",
+  retrain_candidate_scan: "재학습 후보 점검",
   weekly_drift_check: "주간 드리프트 점검",
 }
 
@@ -10,7 +10,7 @@ function localizeSummary(summary) {
   const retrainMatch = /^flagged (\d+) retrain candidates$/.exec(summary)
   if (retrainMatch) return `재학습 후보 ${retrainMatch[1]}건 감지`
   const driftMatch = /^checked (\d+) production models$/.exec(summary)
-  if (driftMatch) return `Production 모델 ${driftMatch[1]}개 점검`
+  if (driftMatch) return `프로덕션 모델 ${driftMatch[1]}건 점검`
   return summary
 }
 

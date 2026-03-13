@@ -1,15 +1,46 @@
-﻿function optionKey(option) {
+function optionKey(option) {
   return `${option.family}:${option.key}`
 }
 
-export default function PlotSelector({ plots = [], value, onChange, onRefresh }) {
+function SourceBadge({ option }) {
+  const label = option.source_preference === "native" ? "기본 경로 우선" : "대체 경로"
+  const color = option.source_preference === "native" ? "var(--success)" : "var(--warning)"
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "2px 8px",
+        borderRadius: 999,
+        border: `1px solid ${color}55`,
+        background: `${color}18`,
+        color,
+        fontSize: 10,
+        fontWeight: 800,
+      }}
+    >
+      {label}
+    </span>
+  )
+}
+
+export default function PlotSelector({
+  plots = [],
+  value,
+  onChange,
+  onRefresh,
+  title = "분석 옵션",
+  description = "가능하면 PyCaret 기본 렌더링을 우선 사용합니다. 대체 경로 항목은 별도로 표시해 실제 사용 경로를 바로 확인할 수 있습니다.",
+  emptyMessage = "사용 가능한 분석 항목이 없습니다.",
+  buttonLabel = "그래프 새로고침",
+}) {
   const modelPlots = plots.filter((plot) => plot.family === "plot")
   const xaiPlots = plots.filter((plot) => plot.family === "xai")
 
   return (
     <div
       style={{
-        width: 260,
+        width: 280,
         borderRight: "1px solid var(--border)",
         padding: 16,
         display: "flex",
@@ -18,13 +49,14 @@ export default function PlotSelector({ plots = [], value, onChange, onRefresh })
         background: "rgba(255, 255, 255, 0.04)",
       }}
     >
-      <h3 style={{ margin: 0, color: "var(--text-primary)" }}>분석 항목 선택</h3>
+      <h3 style={{ margin: 0, color: "var(--text-primary)" }}>{title}</h3>
       <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5 }}>
-        진단 플롯과 XAI 플롯을 선택해 모델 거동과 설명 가능성을 함께 확인합니다.
+        {description}
       </div>
 
-      <Section title="모델 플롯" items={modelPlots} value={value} onChange={onChange} />
-      {xaiPlots.length ? <Section title="XAI 플롯" items={xaiPlots} value={value} onChange={onChange} /> : null}
+      <Section title="모델 그래프" items={modelPlots} value={value} onChange={onChange} />
+      {xaiPlots.length ? <Section title="XAI 그래프" items={xaiPlots} value={value} onChange={onChange} /> : null}
+      {!modelPlots.length && !xaiPlots.length ? <div style={{ color: "var(--text-muted)", fontSize: 12 }}>{emptyMessage}</div> : null}
 
       <button
         onClick={onRefresh}
@@ -39,7 +71,7 @@ export default function PlotSelector({ plots = [], value, onChange, onRefresh })
           cursor: "pointer",
         }}
       >
-        플롯 다시 생성
+        {buttonLabel}
       </button>
     </div>
   )
@@ -67,9 +99,15 @@ function Section({ title, items, value, onChange }) {
               background: selected ? "var(--accent-blue-soft)" : "var(--bg-surface-soft)",
               color: selected ? "var(--accent-blue-strong)" : "var(--text-secondary)",
               fontWeight: selected ? 700 : 500,
+              display: "grid",
+              gap: 6,
             }}
           >
-            {plot.label}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+              <span>{plot.label}</span>
+              <SourceBadge option={plot} />
+            </div>
+            {plot.notes ? <div style={{ fontSize: 11, lineHeight: 1.4, opacity: 0.82 }}>{plot.notes}</div> : null}
           </button>
         )
       })}

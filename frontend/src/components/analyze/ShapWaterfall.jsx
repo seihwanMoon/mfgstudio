@@ -15,14 +15,14 @@ export default function ShapWaterfall({ result, moduleType }) {
           lineHeight: 1.6,
         }}
       >
-        아직 SHAP 결과가 없습니다.
+        아직 SHAP 결과가 생성되지 않았습니다.
         <br />
-        오른쪽 아래에서 행 번호를 입력하고 분석을 실행해보세요.
+        행 번호를 선택한 뒤 설명을 실행하세요.
       </div>
     )
   }
 
-  const scoreLabel = moduleType === "regression" ? "예측값" : "예측 확률"
+  const scoreLabel = moduleType === "regression" ? "예측값" : "예측 점수"
   const maxAbs = Math.max(...(result.shap_values || []).map((item) => Math.abs(item.shap_value)), 1)
 
   return (

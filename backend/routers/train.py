@@ -10,6 +10,7 @@ from database import get_db
 from models.dataset import Dataset
 from models.experiment import Experiment
 from models.trained_model import TrainedModel
+from services.report_service import generate_model_report
 from services.pycaret_service import (
     automl_best_real,
     blend_models_real,
@@ -25,6 +26,20 @@ from services.pycaret_service import (
 )
 
 router = APIRouter()
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float):
+        return value if value == value and value not in {float("inf"), float("-inf")} else None
+    return value
+
+
+def _safe_json_dumps(value: dict) -> str:
+    return json.dumps(_json_safe(value), ensure_ascii=False, allow_nan=False)
 
 
 class SetupRequest(BaseModel):
@@ -231,7 +246,7 @@ async def compare_stream(experiment_id: int, db: Session = Depends(get_db)):
             TrainedModel(
                 experiment_id=experiment_id,
                 algorithm=row["algorithm"],
-                metrics=json.dumps(row["metrics"], ensure_ascii=False),
+                metrics=_safe_json_dumps(row["metrics"]),
                 mlflow_run_id=row["mlflow_run_id"],
                 mlflow_model_name=f"{experiment.name}_{row['algorithm'].lower().replace(' ', '_')}",
             )
@@ -242,12 +257,11 @@ async def compare_stream(experiment_id: int, db: Session = Depends(get_db)):
     async def event_generator():
         for row in results:
             await asyncio.sleep(0.1)
-            yield {"event": "model_result", "data": json.dumps(row, ensure_ascii=False)}
+            yield {"event": "model_result", "data": _safe_json_dumps(row)}
         yield {
             "event": "done",
-            "data": json.dumps(
+            "data": _safe_json_dumps(
                 {"best_algorithm": results[0]["algorithm"] if results else None, "experiment_id": experiment_id},
-                ensure_ascii=False,
             ),
         }
 
@@ -364,8 +378,8 @@ async def tune_stream(job_id: str, db: Session = Depends(get_db)):
     )
     if model:
         model.is_tuned = True
-        model.hyperparams = json.dumps(summary["changed_params"], ensure_ascii=False)
-        model.metrics = json.dumps(summary["after_metrics"], ensure_ascii=False)
+        model.hyperparams = _safe_json_dumps(summary["changed_params"])
+        model.metrics = _safe_json_dumps(summary["after_metrics"])
         model.mlflow_run_id = summary.get("run_id")
     if summary.get("mlflow_experiment_id") is not None:
         experiment.mlflow_exp_id = str(summary["mlflow_experiment_id"])
@@ -375,8 +389,8 @@ async def tune_stream(job_id: str, db: Session = Depends(get_db)):
     async def event_generator():
         for trial in trials:
             await asyncio.sleep(0.04)
-            yield {"event": "trial", "data": json.dumps(trial, ensure_ascii=False)}
-        yield {"event": "done", "data": json.dumps(summary, ensure_ascii=False)}
+            yield {"event": "trial", "data": _safe_json_dumps(trial)}
+        yield {"event": "done", "data": _safe_json_dumps(summary)}
 
     return EventSourceResponse(event_generator())
 
@@ -415,11 +429,26 @@ def finalize_model(model_id: int, db: Session = Depends(get_db)):
     model.mlflow_run_id = result["run_id"]
     experiment.mlflow_exp_id = str(result["mlflow_experiment_id"])
     db.commit()
+    db.refresh(model)
+
+    report_payload = {
+        "report_generated": False,
+        "report_exists": False,
+        "report_path": None,
+        "report_download_url": None,
+        "report_error": None,
+    }
+    try:
+        report_payload.update(generate_model_report(db, model, force=True))
+    except Exception as exc:
+        report_payload["report_error"] = str(exc)
+
     return {
         "model_id": model.id,
         "model_path": model.model_path,
         "final_metrics": result["final_metrics"],
         "run_id": result["run_id"],
+        **report_payload,
     }
 
 

@@ -1,4 +1,4 @@
-import { api } from "./client"
+import { BASE_URL, api } from "./client"
 
 export const dataAPI = {
   upload: (formData) =>
@@ -62,6 +62,21 @@ export const predictAPI = {
 
 export const driftAPI = {
   check: (modelName) => api.post(`/api/drift/check/${modelName}`),
+}
+
+export const reportAPI = {
+  meta: (modelId) => api.get(`/api/report/${modelId}/meta`),
+  generate: (modelId, force = true) => api.post(`/api/report/${modelId}/generate?force=${force}`),
+  downloadUrl: (modelId, force = false) => `${BASE_URL}/api/report/${modelId}?force=${force}`,
+}
+
+export const opsAPI = {
+  experiments: () => api.get("/api/ops/experiments"),
+  archiveExperiment: (experimentId) => api.put(`/api/ops/experiments/${experimentId}/archive`),
+  deleteExperiment: (experimentId) => api.delete(`/api/ops/experiments/${experimentId}`),
+  reports: () => api.get("/api/ops/reports"),
+  deleteReport: (modelId) => api.delete(`/api/ops/reports/${modelId}`),
+  retireModel: (modelId) => api.post(`/api/ops/models/${modelId}/retire`),
 }
 
 export const scheduleAPI = {

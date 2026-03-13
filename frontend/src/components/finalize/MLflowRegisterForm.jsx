@@ -46,7 +46,7 @@ export default function MLflowRegisterForm({ value, onChange, onRegister, onComm
           cursor: "pointer",
         }}
       >
-        레지스트리 등록
+        레지스트리에 등록
       </button>
     </div>
   )

@@ -9,9 +9,9 @@ export default function ShapIndexSelector({ value, onChange, onAnalyze, disabled
         padding: 16,
       }}
     >
-      <div style={{ color: "var(--text-primary)", fontWeight: 700, marginBottom: 8 }}>SHAP 분석 행 선택</div>
+      <div style={{ color: "var(--text-primary)", fontWeight: 700, marginBottom: 8 }}>개별 SHAP</div>
       <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
-        {helperText || "테스트 데이터의 몇 번째 행을 설명할지 입력합니다. 예: `0`은 첫 번째 샘플입니다."}
+        {helperText || "개별 설명을 확인할 행 번호를 입력하세요. 0은 첫 번째 샘플입니다."}
       </div>
       <input
         type="number"
@@ -44,7 +44,7 @@ export default function ShapIndexSelector({ value, onChange, onAnalyze, disabled
           cursor: disabled ? "not-allowed" : "pointer",
         }}
       >
-        SHAP 분석 실행
+        SHAP 실행
       </button>
     </div>
   )

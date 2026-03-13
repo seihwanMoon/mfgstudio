@@ -108,11 +108,11 @@ export default function ExperimentLogTable({
         >
           <span>Run 이름</span>
           <span>상태</span>
-          <span>시작 시간</span>
+          <span>시작 시각</span>
           <span>주요 지표</span>
         </div>
         {!runs.length ? (
-          <div style={{ padding: 16, color: "var(--text-secondary)" }}>선택한 실험의 표시할 run이 없습니다.</div>
+          <div style={{ padding: 16, color: "var(--text-secondary)" }}>선택한 실험에 표시할 run 이 없습니다.</div>
         ) : null}
         {runs.map((row) => (
           <div

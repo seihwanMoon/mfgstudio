@@ -21,7 +21,7 @@ export default function SelectedModelCard({ model }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <div style={{ color: "#E2EEFF", fontSize: 18, fontWeight: 800 }}>{model.algorithm}</div>
         {model.operation ? <Badge color="#38BDF8">{model.operation}</Badge> : null}
-        {model.is_tuned ? <Badge color="#34D399">tuned</Badge> : null}
+        {model.is_tuned ? <Badge color="#34D399">튜닝됨</Badge> : null}
       </div>
       <div style={{ color: "#8BA8C8", fontSize: 12 }}>run_id: {model.mlflow_run_id || "-"}</div>
       <div style={{ color: "#34D399", fontWeight: 700 }}>model_id: {model.id}</div>

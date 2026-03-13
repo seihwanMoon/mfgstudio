@@ -14,13 +14,23 @@ export function useSSETune() {
         )
 
         source.addEventListener("trial", (event) => {
-          addTuneTrial(JSON.parse(event.data))
+          try {
+            addTuneTrial(JSON.parse(event.data))
+          } catch (error) {
+            onError?.(error)
+            source.close()
+          }
         })
         source.addEventListener("done", (event) => {
-          const payload = JSON.parse(event.data)
-          setTuneResult(payload)
-          onDone?.(payload)
-          source.close()
+          try {
+            const payload = JSON.parse(event.data)
+            setTuneResult(payload)
+            onDone?.(payload)
+          } catch (error) {
+            onError?.(error)
+          } finally {
+            source.close()
+          }
         })
         source.onerror = (error) => {
           onError?.(error)

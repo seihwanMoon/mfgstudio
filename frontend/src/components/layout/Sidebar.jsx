@@ -1,10 +1,10 @@
 import { useNavigate } from "react-router-dom"
 
 const GROUPS = [
-  { label: "운영", paths: ["/home"] },
+  { label: "개요", paths: ["/home"] },
   { label: "데이터", paths: ["/upload", "/setup"] },
-  { label: "학습", paths: ["/compare", "/tune"] },
-  { label: "XAI/배포", paths: ["/analyze", "/finalize", "/predict"] },
+  { label: "학습", paths: ["/compare", "/tune", "/plots"] },
+  { label: "설명 / 배포", paths: ["/xai", "/finalize", "/predict"] },
   { label: "MLOps", paths: ["/mlflow"] },
 ]
 
@@ -81,7 +81,7 @@ export default function Sidebar({ activePath, screenMeta }) {
       </div>
 
       <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border)", fontSize: 10 }}>
-        <div style={{ color: "var(--success)" }}>로컬 컨테이너 기준으로 동작 중</div>
+        <div style={{ color: "var(--success)" }}>로컬 컨테이너가 실행 중입니다.</div>
         <div style={{ color: "var(--text-soft)", marginTop: 3 }}>Frontend 5273 / API 8000 / MLflow 5000</div>
       </div>
     </aside>

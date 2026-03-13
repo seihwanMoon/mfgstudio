@@ -11,6 +11,7 @@ from services.mlflow_service import (
     register_run_model,
     transition_model_stage,
 )
+from services.report_service import generate_model_report
 
 router = APIRouter()
 
@@ -27,6 +28,22 @@ class StageRequest(BaseModel):
 
 class RollbackRequest(BaseModel):
     version: int
+
+
+def _build_report_refresh_payload(db: Session, model: TrainedModel | None) -> dict:
+    payload = {
+        "report_generated": False,
+        "report_exists": False,
+        "report_download_url": None,
+        "report_error": None,
+    }
+    if model is None:
+        return payload
+    try:
+        payload.update(generate_model_report(db, model, force=True))
+    except Exception as exc:
+        payload["report_error"] = str(exc)
+    return payload
 
 
 @router.get("/models")
@@ -139,7 +156,14 @@ def change_stage(model_name: str, payload: StageRequest, db: Session = Depends(g
     except Exception:
         mlflow_synced = False
     db.commit()
-    return {"name": model_name, "version": payload.version, "stage": payload.stage, "mlflow_synced": mlflow_synced}
+    report_payload = _build_report_refresh_payload(db, target if payload.stage == "Production" else None)
+    return {
+        "name": model_name,
+        "version": payload.version,
+        "stage": payload.stage,
+        "mlflow_synced": mlflow_synced,
+        **report_payload,
+    }
 
 
 @router.post("/{model_name}/rollback")
@@ -164,4 +188,10 @@ def rollback(model_name: str, payload: RollbackRequest, db: Session = Depends(ge
     except Exception:
         mlflow_synced = False
     db.commit()
-    return {"model_name": model_name, "restored_version": payload.version, "mlflow_synced": mlflow_synced}
+    report_payload = _build_report_refresh_payload(db, target)
+    return {
+        "model_name": model_name,
+        "restored_version": payload.version,
+        "mlflow_synced": mlflow_synced,
+        **report_payload,
+    }

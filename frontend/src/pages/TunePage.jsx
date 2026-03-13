@@ -214,8 +214,8 @@ export default function TunePage() {
         >
           <div style={{ color: "var(--text-primary)", fontWeight: 800 }}>PyCaret 고급 단계</div>
           <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6 }}>
-            비교 결과 상위 모델을 기준으로 <code>blend_models()</code>, <code>stack_models()</code>, <code>automl()</code> 후보를
-            추가 생성합니다. 생성된 후보는 즉시 비교 결과 목록에 반영되고, 이후 <strong>모델 확정</strong> 화면에서 선택할 수 있습니다.
+            비교 결과 상위 모델을 기준으로 <code>blend_models()</code>, <code>stack_models()</code>, <code>automl()</code> 후보를 추가 생성합니다.
+            생성된 후보는 즉시 비교 결과 목록에 반영되고, 이후 <strong>모델 확정</strong> 화면에서 선택할 수 있습니다.
             {moduleType === "classification" ? (
               <>
                 <br />
@@ -247,7 +247,7 @@ export default function TunePage() {
                 disabled={!activeAlgorithm || isAdvancedRunning}
                 style={advancedButtonStyle}
               >
-                Calibrate Model
+                확률 보정
               </button>
             ) : null}
             {moduleType === "classification" ? (
@@ -256,7 +256,7 @@ export default function TunePage() {
                 disabled={!activeAlgorithm || isAdvancedRunning || !isBinaryClassification}
                 style={advancedButtonStyle}
               >
-                Optimize Threshold
+                Threshold 최적화
               </button>
             ) : null}
             <button onClick={() => navigate("/finalize")} style={secondaryButtonStyle}>
@@ -266,7 +266,7 @@ export default function TunePage() {
           {advancedError ? <div style={{ color: "var(--danger)", fontSize: 13 }}>{advancedError}</div> : null}
           {moduleType === "classification" && !isBinaryClassification ? (
             <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
-              <code>optimize_threshold()</code>는 이진 분류에서만 사용할 수 있습니다. 현재 타깃 클래스 수를 확인해보세요.
+              <code>optimize_threshold()</code>는 이진 분류에서만 사용할 수 있습니다. 현재 타깃의 클래스 수를 확인해 보세요.
             </div>
           ) : null}
           {advancedResult ? (
@@ -286,18 +286,18 @@ export default function TunePage() {
                 생성 방식: {advancedResult.operation}
                 {advancedResult.members?.length ? ` / 구성 모델: ${advancedResult.members.join(", ")}` : ""}
                 {advancedResult.resolved_model_name ? ` / 선택 모델: ${advancedResult.resolved_model_name}` : ""}
-                {advancedResult.method ? ` / 방식: ${advancedResult.method}` : ""}
+                {advancedResult.method ? ` / 방법: ${advancedResult.method}` : ""}
                 {advancedResult.optimize ? ` / 기준 지표: ${advancedResult.optimize}` : ""}
               </div>
               <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
-                주요 지표{" "}
+                주요 지표:{" "}
                 {Object.entries(advancedResult.after_metrics || {})
                   .slice(0, 4)
                   .map(([key, value]) => `${key}=${value}`)
                   .join(" / ")}
               </div>
               <div style={{ color: "var(--accent-blue)", fontSize: 12 }}>
-                후보 목록을 갱신했습니다. 모델 확정 단계에서 바로 선택할 수 있습니다.
+                후보 목록에 반영됐습니다. 모델 확정 단계에서 바로 선택할 수 있습니다.
               </div>
             </div>
           ) : null}

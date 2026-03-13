@@ -17,6 +17,23 @@ TOTAL      [ 76 / 76 ]
 
 All planned tasks are currently complete.
 
+## Recent Updates
+
+- 2026-03-13: expanded Korean UI cleanup across Tune, Finalize, MLflow, dashboard detail cards, and remaining shared navigation/layout surfaces.
+- 2026-03-13: added native-first `interpret_model()` attempts for XAI `summary`, `dependence`, and `pfi`, while preserving explicit custom fallback responses when PyCaret native output is unavailable.
+- 2026-03-13: rebuilt and revalidated Docker frontend/backend after localization and XAI changes; `/api/analyze/plot` now returns `200` again for repaired XAI requests.
+- 2026-03-13: fixed automatic report generation failure by pinning `pydyf<0.11` for the `weasyprint==61.2` backend image.
+- 2026-03-13: completed a real-model report smoke test (`model_id=665`) covering `meta -> generate -> download(PDF)` and localized the report template plus remaining compare/MLflow panels.
+- 2026-03-13: enriched the PDF report from a flat text/table layout into an operations-style report with overview KPI cards, workflow steps, dataset profile, compare/tune summary, artifact inventory, and Korean narrative sections.
+- 2026-03-13: re-normalized Finalize page strings and pipeline summary labels after discovering residual mojibake in the finalize flow.
+- 2026-03-13: added `MLflow > 운영 관리` for experiment housekeeping and report management, including experiment archive, safe-delete gating, report list, report reopen, report regenerate, and report PDF deletion.
+- 2026-03-13: localized MLflow tabs, experiment log view, experiment compare view, and run-status labels while wiring the new operations APIs.
+- 2026-03-13: added a model retirement workflow that archives stage first and, when no prediction history exists, also removes the MLflow version link and finalized model artifact.
+- 2026-03-13: fixed XAI `summary`, `dependence`, and individual SHAP failures caused by SHAP/raw-pipeline schema mismatches.
+- 2026-03-13: split the old Analyze flow into dedicated `Plots` and `XAI` workspaces.
+- 2026-03-13: cleaned several mojibake-heavy navigation and XAI panel labels.
+- 2026-03-13: reapplied Korean UI labels to the app shell, sidebar, header, and plots/XAI screens after an English regression and encoding corruption in the frontend layout files.
+
 ---
 
 ## Phase 0 - Environment Setup (SETUP)
@@ -251,6 +268,7 @@ All planned tasks are currently complete.
 | 2026-03-10 | Refined the in-app MLflow ops view by filtering PyCaret internal runs from experiment logs, converting visible timestamps to KST in the frontend, enriching experiment compare with latest metric tables, and localizing the schedule/registry panels | Codex |
 | 2026-03-10 | Implemented PyCaret experiment persistence with `save_experiment()` / `load_experiment()`, cached compare/tuned model artifacts under `data/experiments/`, persisted context metadata to disk, and verified analyze/XAI still works after clearing in-memory contexts | Codex |
 | 2026-03-10 | Replaced the fixed model list API with PyCaret bootstrap experiments so `GET /api/train/models` now reflects the actual installed estimator catalog for classification, regression, clustering, anomaly, and time series modules | Codex |
+| 2026-03-13 | Split Analyze into `Plots` and `XAI`, added automatic report generation and Production-stage report refresh, repaired XAI for PyCaret pipelines, reintroduced Korean UI across updated flows, started native-first `interpret_model()` attempts with explicit fallback metadata, fixed the WeasyPrint/PyDyf PDF dependency break, and validated report generation against a real saved model | Codex |
 | 2026-03-10 | Began PyCaret late-stage workflow expansion with `blend_models()`, `stack_models()`, and `automl()` candidate APIs, updated Tune/Finalize screens to surface generated candidates, rebuilt backend/frontend containers, and prepared handoff notes for the remaining MLflow blend-run termination issue | Codex |
 | 2026-03-12 | Fixed blend-path MLflow lifecycle handling so new `blend::Blend Ensemble (2)` runs and internal `Voting Regressor` runs terminate cleanly, re-verified advanced candidate generation through the live API, and cleaned stale RUNNING blend-related runs from MLflow history | Codex |
 | 2026-03-12 | Expanded the PyCaret model catalog API with estimator metadata (`id`, `reference`, `turbo`, `family`, `tags`), connected compare-screen family/scope filters to real `include` lists, rebuilt backend/frontend containers, and re-verified filtered compare execution with linear-regression-only runs | Codex |
@@ -270,6 +288,10 @@ All planned tasks are currently complete.
 | 2026-03-13 | Switched time-series `forecast / residuals / acf / pacf` analysis views to PyCaret native plotly figures, added future-horizon expansion for forecast plots, and preserved PNG fallback for unsupported native cases | Codex |
 | 2026-03-13 | Replaced the time-series residual view with a residual-only plotly chart because PyCaret's raw residual figure mixed actual values and residuals on the same axis, which was misleading in the app UI | Codex |
 | 2026-03-13 | Rewrote `README.md` to reflect the real current state of the product, including module-by-module support, live MLflow integration, sample datasets, and the current next-step documentation set | Codex |
+| 2026-03-13 | Added `IMPLEMENTATION_PLAN_PYCARET_NATIVE_REPORTS.md`, implemented automatic PDF generation on finalize, expanded report APIs with `meta` and `generate`, enriched report content with experiment/dataset/setup summary fields, and surfaced report access in the Finalize screen | Codex |
+| 2026-03-13 | Added analyze response source metadata (`native_source`, `fallback_used`), enriched plot catalogs with native/fallback support metadata, refreshed the Analyze UI to show preferred vs actual rendering paths, and regenerated Production reports on stage changes / rollback | Codex |
+| 2026-03-13 | Fixed tune SSE payload serialization so `NaN` / non-finite values are normalized before JSON emission, added frontend parse guards in `useSSETune.js`, and documented `/finalize` as the deploy-step route in the app shell | Codex |
+| 2026-03-13 | Split Analyze into separate `Plots` and `XAI` screens, repaired XAI `summary` / `dependence` / individual SHAP for PyCaret pipeline models, then re-localized the app shell and analysis screens to Korean after the first refactor left menu labels in English and some files in mojibake | Codex |
 
 ---
 

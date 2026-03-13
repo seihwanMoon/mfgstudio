@@ -39,7 +39,7 @@ export default function RadarCompare({ models = [] }) {
 
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 14, background: "var(--bg-surface)", boxShadow: "var(--shadow-panel)" }}>
-      <div style={{ fontSize: 11, color: "var(--text-primary)", fontWeight: 700, marginBottom: 10 }}>Radar Compare</div>
+      <div style={{ fontSize: 11, color: "var(--text-primary)", fontWeight: 700, marginBottom: 10 }}>레이더 비교</div>
       <div style={{ height: 220 }}>
         {models.length && metricKeys.length ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -63,7 +63,7 @@ export default function RadarCompare({ models = [] }) {
           </ResponsiveContainer>
         ) : (
           <div style={{ height: "100%", display: "grid", placeItems: "center", color: "var(--text-secondary)", fontSize: 12 }}>
-            비교할 모델이 없습니다
+            비교할 모델이 없습니다.
           </div>
         )}
       </div>

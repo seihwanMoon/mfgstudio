@@ -26,7 +26,7 @@ export default function LeaderboardTable({ results = [] }) {
         {metricKeys.map((metric) => (
           <span key={metric}>{metric}</span>
         ))}
-        <span>TT(s)</span>
+        <span>시간(s)</span>
       </div>
       {results.map((row, index) => {
         const selected = selectedModelsForTune.includes(row.algorithm)
@@ -61,7 +61,7 @@ export default function LeaderboardTable({ results = [] }) {
                 <span>{row.algorithm}</span>
                 {index === 0 ? <Pill color="rgba(217, 154, 17, 0.14)" border="rgba(217, 154, 17, 0.3)" textColor="var(--warning)">최고 추천</Pill> : null}
                 {row.operation ? <Pill color="rgba(56, 189, 248, 0.12)" border="rgba(56, 189, 248, 0.28)" textColor="var(--accent-blue-strong)">{row.operation}</Pill> : null}
-                {row.is_tuned ? <Pill color="rgba(52, 211, 153, 0.12)" border="rgba(52, 211, 153, 0.28)" textColor="var(--success)">tuned</Pill> : null}
+                {row.is_tuned ? <Pill color="rgba(52, 211, 153, 0.12)" border="rgba(52, 211, 153, 0.28)" textColor="var(--success)">튜닝됨</Pill> : null}
               </div>
               {row.resolved_model_name ? <div style={{ color: "var(--text-soft)", fontSize: 11 }}>실제 추정기: {row.resolved_model_name}</div> : null}
               {row.members?.length ? <div style={{ color: "var(--text-soft)", fontSize: 11 }}>구성 모델: {row.members.join(", ")}</div> : null}

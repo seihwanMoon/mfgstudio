@@ -23,8 +23,8 @@ export default function ModelCard({ model, selected, onSelect }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-            <Badge color="#34D399">{model.stage || "None"}</Badge>
-            <Badge color="#4A9DFF">{model.algorithm || "Unknown"}</Badge>
+            <Badge color="#34D399">{model.stage || "미지정"}</Badge>
+            <Badge color="#4A9DFF">{model.algorithm || "알 수 없음"}</Badge>
           </div>
           <div style={{ color: "var(--text-primary)", fontSize: 16, fontWeight: 800 }}>{model.mlflow_model_name || "등록 전 모델"}</div>
         </div>

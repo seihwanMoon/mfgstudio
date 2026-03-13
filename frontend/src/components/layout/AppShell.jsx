@@ -4,15 +4,16 @@ import Header from "./Header"
 import Sidebar from "./Sidebar"
 
 const SCREEN_META = {
-  "/home": { label: "홈 대시보드", icon: "H", color: "#38BDF8", phase: "HOME", desc: "전체 모델 운영 현황" },
-  "/upload": { label: "데이터 업로드", icon: "U", color: "#38BDF8", phase: "DATA", desc: "CSV/Excel 업로드와 품질 분석" },
-  "/setup": { label: "실험 설정", icon: "S", color: "#38BDF8", phase: "SETUP", desc: "setup() 파라미터 구성" },
-  "/compare": { label: "모델 비교", icon: "C", color: "#FBBF24", phase: "TRAIN", desc: "compare_models() 리더보드" },
-  "/tune": { label: "학습·튜닝", icon: "T", color: "#FBBF24", phase: "TRAIN", desc: "tune_model() 기반 최적화" },
-  "/analyze": { label: "XAI 분석", icon: "X", color: "#A78BFA", phase: "XAI", desc: "plot_model() + SHAP 설명" },
-  "/finalize": { label: "모델 확정", icon: "F", color: "#34D399", phase: "DEPLOY", desc: "finalize + Registry 등록" },
-  "/predict": { label: "예측 실행", icon: "P", color: "#34D399", phase: "SERVE", desc: "단건/배치/이력 예측" },
-  "/mlflow": { label: "MLflow 관리", icon: "M", color: "#8BA8C8", phase: "OPS", desc: "실험 로그와 운영 관리" },
+  "/home": { label: "대시보드", icon: "H", color: "#38BDF8", phase: "HOME", desc: "전체 작업 현황과 최근 모델 상태" },
+  "/upload": { label: "업로드", icon: "U", color: "#38BDF8", phase: "DATA", desc: "데이터 업로드와 원본 확인" },
+  "/setup": { label: "설정", icon: "S", color: "#38BDF8", phase: "SETUP", desc: "PyCaret setup 파라미터 구성" },
+  "/compare": { label: "비교", icon: "C", color: "#FBBF24", phase: "TRAIN", desc: "compare_models() 후보 비교" },
+  "/tune": { label: "튜닝", icon: "T", color: "#FBBF24", phase: "TRAIN", desc: "tune_model() 기반 최적화" },
+  "/plots": { label: "그래프", icon: "P", color: "#F59E0B", phase: "ANALYZE", desc: "튜닝 이후 진단 그래프 통합 화면" },
+  "/xai": { label: "XAI", icon: "X", color: "#A78BFA", phase: "EXPLAIN", desc: "설명 그래프와 행 단위 SHAP" },
+  "/finalize": { label: "모델 확정", icon: "F", color: "#34D399", phase: "DEPLOY", desc: "모델 확정과 리포트 및 레지스트리 반영" },
+  "/predict": { label: "예측", icon: "R", color: "#34D399", phase: "SERVE", desc: "단건, 배치, 이력 예측 실행" },
+  "/mlflow": { label: "MLflow", icon: "M", color: "#8BA8C8", phase: "OPS", desc: "실험, 런, 레지스트리 운영 상태" },
 }
 
 const ORDER = Object.keys(SCREEN_META)

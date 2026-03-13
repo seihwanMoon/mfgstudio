@@ -2,6 +2,7 @@
 import importlib.util
 from io import BytesIO
 import json
+import math
 from pathlib import Path
 import re
 import time
@@ -666,12 +667,18 @@ def _to_jsonable(value):
         return bool(value)
     if isinstance(value, (np.integer,)):
         return int(value)
-    if isinstance(value, (np.floating,)):
-        return float(value)
+    if isinstance(value, (np.floating, float)):
+        numeric = float(value)
+        return numeric if math.isfinite(numeric) else None
     if isinstance(value, dict):
         return {key: _to_jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_to_jsonable(item) for item in value]
+    try:
+        if pd.isna(value):
+            return None
+    except TypeError:
+        pass
     return value
 
 
@@ -1048,7 +1055,17 @@ def _default_timeseries_forecast_horizon(y_train: pd.Series, y_test: pd.Series) 
     return max(len(y_test), min(12, max(6, len(y_train) // 4)))
 
 
-def _plotly_figure_payload(fig) -> dict:
+def _image_payload(image_base64: str, native_source: str, fallback_used: bool = False) -> dict:
+    return {
+        "render_mode": "image",
+        "base64_image": image_base64,
+        "image_format": "png",
+        "native_source": native_source,
+        "fallback_used": fallback_used,
+    }
+
+
+def _plotly_figure_payload(fig, native_source: str, fallback_used: bool = False) -> dict:
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="white",
@@ -1060,6 +1077,8 @@ def _plotly_figure_payload(fig) -> dict:
         "render_mode": "plotly",
         "plotly_figure_json": fig.to_json(),
         "image_format": "plotly",
+        "native_source": native_source,
+        "fallback_used": fallback_used,
     }
 
 
@@ -1093,7 +1112,7 @@ def _build_timeseries_residual_plot(context: dict, model) -> dict:
         xaxis_title="Time",
         yaxis_title="Residual",
     )
-    return _plotly_figure_payload(fig)
+    return _plotly_figure_payload(fig, native_source="timeseries_custom_residuals", fallback_used=True)
 
 
 def _normalize_timeseries_index(index) -> list:
@@ -1201,13 +1220,13 @@ def _build_timeseries_plot(context: dict, model, plot_type: str, use_train_data:
             data_kwargs=data_kwargs,
             fig_kwargs={"big_data_threshold": 10000},
         )
-        return _plotly_figure_payload(fig)
+        return _plotly_figure_payload(fig, native_source="plot_model", fallback_used=False)
     except Exception:
-        return {
-            "render_mode": "image",
-            "base64_image": _build_timeseries_plot_png(context, model, plot_type, use_train_data),
-            "image_format": "png",
-        }
+        return _image_payload(
+            _build_timeseries_plot_png(context, model, plot_type, use_train_data),
+            native_source=f"timeseries_{plot_type}_png_fallback",
+            fallback_used=True,
+        )
 
 
 def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | None = None) -> dict:
@@ -1696,9 +1715,17 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
     _clear_generated_plot_files()
 
     if context["module_type"] == "anomaly" and plot_type in {"tsne", "umap"}:
-        return _build_anomaly_embedding_plot(context, model, plot_type)
+        return _image_payload(
+            _build_anomaly_embedding_plot(context, model, plot_type),
+            native_source=f"anomaly_{plot_type}_fallback",
+            fallback_used=True,
+        )
     if context["module_type"] == "clustering" and plot_type in {"cluster", "tsne"}:
-        return _build_clustering_plot(context, model, plot_type)
+        return _image_payload(
+            _build_clustering_plot(context, model, plot_type),
+            native_source=f"clustering_{plot_type}_fallback",
+            fallback_used=True,
+        )
     if context["module_type"] == "timeseries" and plot_type in {"forecast", "residuals", "acf", "pacf"}:
         return _build_timeseries_plot(context, model, plot_type, use_train_data)
 
@@ -1724,7 +1751,69 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
         if plot_type == "feature" and context["module_type"] in {"classification", "regression"}:
             return get_interpret_plot(experiment_id, algorithm, "pfi", use_train_data)
         raise
-    return _read_latest_png()
+    return _image_payload(_read_latest_png(), native_source="plot_model", fallback_used=False)
+
+
+def _resolve_xai_model_and_features(context: dict, model, use_train_data: bool = False):
+    pc = context["pc"]
+    supervised = context["module_type"] in {"classification", "regression"}
+    raw_key = "X_train" if use_train_data or not supervised else "X_test"
+    transformed_key = "X_train_transformed" if use_train_data or not supervised else "X_test_transformed"
+
+    raw_features = pc.get_config(raw_key)
+    transformed_features = pc.get_config(transformed_key)
+    xai_model = model
+    feature_frame = transformed_features if transformed_features is not None and len(transformed_features) else raw_features
+
+    if hasattr(model, "steps") and len(getattr(model, "steps", [])) > 1 and transformed_features is not None and len(transformed_features):
+        xai_model = model.steps[-1][1]
+
+    if feature_frame is None:
+        return xai_model, pd.DataFrame()
+    if not isinstance(feature_frame, pd.DataFrame):
+        feature_frame = pd.DataFrame(feature_frame)
+
+    numeric_frame = feature_frame.copy()
+    for column in numeric_frame.columns:
+        numeric_frame[column] = pd.to_numeric(numeric_frame[column], errors="coerce")
+    numeric_frame = numeric_frame.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    return xai_model, numeric_frame
+
+
+def _resolve_classification_predictor(model):
+    if hasattr(model, "predict_proba"):
+        return model.predict_proba, True
+    return model.predict, False
+
+
+def _try_native_interpret_plot(context: dict, model, plot_type: str, use_train_data: bool, feature_name: str | None = None) -> dict | None:
+    native_plot_map = {
+        "summary": "summary",
+        "dependence": "correlation",
+        "pfi": "pfi",
+    }
+    native_plot = native_plot_map.get(plot_type)
+    if not native_plot or context["module_type"] not in {"classification", "regression"}:
+        return None
+
+    pc = context["pc"]
+    kwargs = {
+        "plot": native_plot,
+        "save": True,
+        "use_train_data": use_train_data,
+    }
+    if native_plot == "correlation" and feature_name:
+        kwargs["feature"] = feature_name
+
+    _clear_generated_plot_files()
+    try:
+        pc.interpret_model(model, **kwargs)
+        image_base64 = _read_latest_png()
+        if image_base64:
+            return _image_payload(image_base64, native_source="interpret_model", fallback_used=False)
+    except Exception:
+        return None
+    return None
 
 
 def get_interpret_plot(
@@ -1733,38 +1822,46 @@ def get_interpret_plot(
     plot_type: str,
     use_train_data: bool = False,
     row_index: int | None = None,
-) -> str:
+) -> dict:
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
     _apply_korean_font_preferences()
     supervised = context["module_type"] in {"classification", "regression"}
-    features_key = "X_train_transformed" if use_train_data or not supervised else "X_test_transformed"
     original_features_key = "X_train" if use_train_data or not supervised else "X_test"
     target_key = "y_train" if use_train_data or not supervised else "y_test"
-    transformed_target_key = "y_train_transformed" if use_train_data or not supervised else "y_test_transformed"
-    features = pc.get_config(features_key)
+    features = pc.get_config(original_features_key)
+    xai_model, xai_features = _resolve_xai_model_and_features(context, model, use_train_data)
 
-    if features is None or len(features) == 0:
-        return ""
+    if features is None or len(features) == 0 or len(xai_features) == 0:
+        return _image_payload("", native_source="custom_xai_empty", fallback_used=True)
+
+    native_feature_name = None
+    if plot_type == "dependence" and features is not None and len(features.columns):
+        native_feature_name = str(features.columns[0])
+
+    native_payload = _try_native_interpret_plot(context, model, plot_type, use_train_data, native_feature_name)
+    if native_payload is not None:
+        return native_payload
 
     if plot_type == "summary":
         if context["module_type"] == "classification":
-            explainer = shap.Explainer(model.predict_proba, features)
-            explanation = explainer(features)
+            predictor, uses_proba = _resolve_classification_predictor(xai_model)
+            explainer = shap.Explainer(predictor, xai_features)
+            explanation = explainer(xai_features)
             values = explanation.values
-            if values.ndim == 3:
+            if uses_proba and values.ndim == 3:
                 importance = np.mean(np.abs(values), axis=(0, 2))
             else:
                 importance = np.mean(np.abs(values), axis=0)
         elif context["module_type"] == "regression":
-            explainer = shap.Explainer(model.predict, features)
-            explanation = explainer(features)
+            explainer = shap.Explainer(xai_model.predict, xai_features)
+            explanation = explainer(xai_features)
             importance = np.mean(np.abs(explanation.values), axis=0)
         else:
             raise ValueError(f"Unsupported XAI summary module: {context['module_type']}")
 
         ranked = (
-            pd.Series(importance, index=features.columns)
+            pd.Series(importance, index=xai_features.columns)
             .sort_values(ascending=False)
             .head(12)
             .sort_values(ascending=True)
@@ -1773,28 +1870,29 @@ def get_interpret_plot(
         plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#38bdf8")
         plt.title("SHAP Summary Importance")
         plt.xlabel("Mean |SHAP value|")
-        return _figure_to_base64()
+        return _image_payload(_figure_to_base64(), native_source="custom_xai_summary", fallback_used=True)
 
     if plot_type == "dependence":
         if context["module_type"] == "classification":
-            explainer = shap.Explainer(model.predict_proba, features)
-            explanation = explainer(features)
+            predictor, uses_proba = _resolve_classification_predictor(xai_model)
+            explainer = shap.Explainer(predictor, xai_features)
+            explanation = explainer(xai_features)
             values = explanation.values
-            if values.ndim == 3:
+            if uses_proba and values.ndim == 3:
                 shap_matrix = np.mean(values, axis=2)
             else:
                 shap_matrix = values
         elif context["module_type"] == "regression":
-            explainer = shap.Explainer(model.predict, features)
-            explanation = explainer(features)
+            explainer = shap.Explainer(xai_model.predict, xai_features)
+            explanation = explainer(xai_features)
             shap_matrix = explanation.values
         else:
             raise ValueError(f"Unsupported XAI dependence module: {context['module_type']}")
 
         importance = np.mean(np.abs(shap_matrix), axis=0)
         feature_index = int(np.argmax(importance))
-        feature_name = features.columns[feature_index]
-        x_values = pd.to_numeric(features.iloc[:, feature_index], errors="coerce")
+        feature_name = xai_features.columns[feature_index]
+        x_values = pd.to_numeric(xai_features.iloc[:, feature_index], errors="coerce")
         y_values = pd.to_numeric(pd.Series(shap_matrix[:, feature_index]), errors="coerce")
         plot_frame = pd.DataFrame({"x": x_values, "y": y_values}).dropna()
         if plot_frame.empty:
@@ -1806,7 +1904,7 @@ def get_interpret_plot(
         plt.title(f"SHAP Dependence: {_sanitize_column_name(feature_name)}")
         plt.xlabel(_sanitize_column_name(feature_name))
         plt.ylabel("SHAP value")
-        return _figure_to_base64()
+        return _image_payload(_figure_to_base64(), native_source="custom_xai_dependence", fallback_used=True)
 
     if plot_type == "pfi":
         if not supervised:
@@ -1849,54 +1947,73 @@ def get_interpret_plot(
         plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#22c55e")
         plt.title("Permutation Feature Importance")
         plt.xlabel("Mean importance")
-        return _figure_to_base64()
+        return _image_payload(_figure_to_base64(), native_source="custom_xai_pfi", fallback_used=True)
 
     raise ValueError(f"Unsupported XAI plot type: {plot_type}")
 
 
 def list_plot_options(module_type: str) -> dict:
+    def option(
+        key: str,
+        label: str,
+        family: str,
+        source_preference: str,
+        native_supported: bool,
+        fallback_supported: bool,
+        notes: str = "",
+    ) -> dict:
+        return {
+            "key": key,
+            "label": label,
+            "family": family,
+            "source_preference": source_preference,
+            "native_supported": native_supported,
+            "fallback_supported": fallback_supported,
+            "notes": notes,
+        }
+
     model_plots = {
         "classification": [
-            {"key": "auc", "label": "ROC AUC", "family": "plot"},
-            {"key": "confusion_matrix", "label": "혼동 행렬", "family": "plot"},
-            {"key": "feature", "label": "변수 중요도", "family": "plot"},
-            {"key": "learning", "label": "학습 곡선", "family": "plot"},
-            {"key": "pr", "label": "정밀도-재현율", "family": "plot"},
-            {"key": "calibration", "label": "보정 곡선", "family": "plot"},
+            option("auc", "ROC AUC", "plot", "native", True, False, "Rendered via plot_model()."),
+            option("confusion_matrix", "혼동 행렬", "plot", "native", True, False, "Rendered via plot_model()."),
+            option("feature", "변수 중요도", "plot", "native", True, True, "Falls back to custom PFI if native feature plot is unavailable."),
+            option("learning", "학습 곡선", "plot", "native", True, False, "Rendered via plot_model()."),
+            option("pr", "정밀도-재현율", "plot", "native", True, False, "Rendered via plot_model()."),
+            option("calibration", "보정 곡선", "plot", "native", True, False, "Rendered via plot_model()."),
         ],
         "regression": [
-            {"key": "residuals", "label": "잔차 플롯", "family": "plot"},
-            {"key": "error", "label": "예측 오차", "family": "plot"},
-            {"key": "cooks", "label": "영향도", "family": "plot"},
-            {"key": "feature", "label": "변수 중요도", "family": "plot"},
-            {"key": "learning", "label": "학습 곡선", "family": "plot"},
+            option("residuals", "잔차 플롯", "plot", "native", True, False, "Rendered via plot_model()."),
+            option("error", "예측 오차", "plot", "native", True, False, "Rendered via plot_model()."),
+            option("cooks", "영향도", "plot", "native", True, False, "Rendered via plot_model()."),
+            option("feature", "변수 중요도", "plot", "native", True, True, "Falls back to custom PFI if native feature plot is unavailable."),
+            option("learning", "학습 곡선", "plot", "native", True, False, "Rendered via plot_model()."),
         ],
         "clustering": [
-            {"key": "cluster", "label": "클러스터 분포", "family": "plot"},
-            {"key": "tsne", "label": "t-SNE", "family": "plot"},
-            {"key": "elbow", "label": "엘보", "family": "plot"},
+            option("cluster", "클러스터 분포", "plot", "fallback", False, True, "Custom fallback projection."),
+            option("tsne", "t-SNE", "plot", "fallback", False, True, "Custom fallback embedding."),
+            option("elbow", "엘보", "plot", "native", True, False, "Rendered via plot_model()."),
         ],
         "anomaly": [
-            {"key": "tsne", "label": "t-SNE", "family": "plot"},
-            *([{"key": "umap", "label": "UMAP", "family": "plot"}] if _has_umap() else []),
+            option("tsne", "t-SNE", "plot", "fallback", False, True, "Custom fallback embedding."),
+            *([option("umap", "UMAP", "plot", "fallback", False, True, "Custom fallback embedding.")] if _has_umap() else []),
         ],
         "timeseries": [
-            {"key": "forecast", "label": "예측 추세", "family": "plot"},
-            {"key": "residuals", "label": "잔차 플롯", "family": "plot"},
-            {"key": "acf", "label": "ACF", "family": "plot"},
-            {"key": "pacf", "label": "PACF", "family": "plot"},
+            option("forecast", "예측 추세", "plot", "native", True, True, "Uses native plot_model(return_fig=True) when available."),
+            option("residuals", "잔차 플롯", "plot", "fallback", False, True, "Uses residual-only app fallback for clearer interpretation."),
+            option("acf", "ACF", "plot", "native", True, True, "Uses native plot_model(return_fig=True) with PNG fallback."),
+            option("pacf", "PACF", "plot", "native", True, True, "Uses native plot_model(return_fig=True) with PNG fallback."),
         ],
     }
     xai_plots = {
         "classification": [
-            {"key": "summary", "label": "SHAP 요약", "family": "xai"},
-            {"key": "dependence", "label": "SHAP 의존도", "family": "xai"},
-            {"key": "pfi", "label": "Permutation 중요도", "family": "xai"},
+            option("summary", "SHAP 요약", "xai", "native", True, True, "interpret_model(plot='summary')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
+            option("dependence", "SHAP 의존도", "xai", "native", True, True, "interpret_model(plot='correlation')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
+            option("pfi", "Permutation 중요도", "xai", "native", True, True, "interpret_model(plot='pfi')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
         ],
         "regression": [
-            {"key": "summary", "label": "SHAP 요약", "family": "xai"},
-            {"key": "dependence", "label": "SHAP 의존도", "family": "xai"},
-            {"key": "pfi", "label": "Permutation 중요도", "family": "xai"},
+            option("summary", "SHAP 요약", "xai", "native", True, True, "interpret_model(plot='summary')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
+            option("dependence", "SHAP 의존도", "xai", "native", True, True, "interpret_model(plot='correlation')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
+            option("pfi", "Permutation 중요도", "xai", "native", True, True, "interpret_model(plot='pfi')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
         ],
     }
     return {
@@ -1908,10 +2025,7 @@ def list_plot_options(module_type: str) -> dict:
 
 def get_shap(experiment_id: int, algorithm: str, row_index: int = 0) -> dict:
     context, model = _get_active_model(experiment_id, algorithm)
-    pc = context["pc"]
-
-    dataset_name = "X_test_transformed" if context["module_type"] in {"classification", "regression"} else "X_train_transformed"
-    features = pc.get_config(dataset_name)
+    xai_model, features = _resolve_xai_model_and_features(context, model, use_train_data=False)
     if len(features) == 0:
         return {"prediction": None, "score": 0.0, "shap_values": []}
 
@@ -1919,18 +2033,23 @@ def get_shap(experiment_id: int, algorithm: str, row_index: int = 0) -> dict:
     sample = features.iloc[[safe_index]]
 
     if context["module_type"] == "classification":
-        explainer = shap.Explainer(model.predict_proba, features)
+        predictor, uses_proba = _resolve_classification_predictor(xai_model)
+        explainer = shap.Explainer(predictor, features)
         explanation = explainer(sample)
-        probabilities = model.predict_proba(sample)[0]
-        class_index = int(np.argmax(probabilities))
-        shap_values = explanation.values[0, :, class_index]
-        prediction = str(model.predict(sample)[0])
-        score = round(float(probabilities[class_index]), 4)
+        prediction = str(xai_model.predict(sample)[0])
+        if uses_proba:
+            probabilities = xai_model.predict_proba(sample)[0]
+            class_index = int(np.argmax(probabilities))
+            shap_values = explanation.values[0, :, class_index] if explanation.values.ndim == 3 else explanation.values[0]
+            score = round(float(probabilities[class_index]), 4)
+        else:
+            shap_values = explanation.values[0]
+            score = None
     elif context["module_type"] == "regression":
-        explainer = shap.Explainer(model.predict, features)
+        explainer = shap.Explainer(xai_model.predict, features)
         explanation = explainer(sample)
         shap_values = explanation.values[0]
-        prediction = round(float(model.predict(sample)[0]), 4)
+        prediction = round(float(xai_model.predict(sample)[0]), 4)
         score = prediction
     else:
         raise ValueError("SHAP 분석은 분류와 회귀 모듈에서만 지원합니다.")

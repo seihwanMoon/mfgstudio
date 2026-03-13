@@ -8,9 +8,11 @@ import FinalizePage from "./pages/FinalizePage"
 import HomePage from "./pages/HomePage"
 import MLflowPage from "./pages/MLflowPage"
 import PredictPage from "./pages/PredictPage"
+import PlotsPage from "./pages/PlotsPage"
 import SetupPage from "./pages/SetupPage"
 import TunePage from "./pages/TunePage"
 import UploadPage from "./pages/UploadPage"
+import XAIPage from "./pages/XAIPage"
 import useStore from "./store/useStore"
 
 export default function App() {
@@ -31,6 +33,8 @@ export default function App() {
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/tune" element={<TunePage />} />
+          <Route path="/plots" element={<PlotsPage />} />
+          <Route path="/xai" element={<XAIPage />} />
           <Route path="/analyze" element={<AnalyzePage />} />
           <Route path="/finalize" element={<FinalizePage />} />
           <Route path="/predict" element={<PredictPage />} />
