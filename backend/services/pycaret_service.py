@@ -532,11 +532,21 @@ def _activate_experiment(experiment_id: int):
     prepared_df, prepared_params = _prepare_training_frame(df, context["params"], context)
     experiment_pickle = _experiment_pickle_path(experiment_id)
     if experiment_pickle.exists():
-        loaded_experiment = pc.load_experiment(experiment_pickle, data=prepared_df)
-        pc.set_current_experiment(loaded_experiment)
+        try:
+            loaded_experiment = pc.load_experiment(experiment_pickle, data=prepared_df)
+            pc.set_current_experiment(loaded_experiment)
+            context["experiment_restore_mode"] = "pickle"
+            context["experiment_restore_reason"] = "저장된 PyCaret experiment snapshot을 복구했습니다."
+        except Exception as exc:
+            setup_kwargs = _build_setup_kwargs(prepared_df, context["module_type"], prepared_params, context["experiment_name"])
+            pc.setup(**setup_kwargs)
+            context["experiment_restore_mode"] = "setup_rebuild"
+            context["experiment_restore_reason"] = f"pickle 복구 실패로 setup을 다시 수행했습니다: {exc}"
     else:
         setup_kwargs = _build_setup_kwargs(prepared_df, context["module_type"], prepared_params, context["experiment_name"])
         pc.setup(**setup_kwargs)
+        context["experiment_restore_mode"] = "setup_rebuild"
+        context["experiment_restore_reason"] = "저장된 experiment snapshot이 없어 setup을 다시 수행했습니다."
     name_to_id, id_to_name = _get_model_name_maps(pc)
     context["pc"] = pc
     context["name_to_id"] = name_to_id
@@ -1055,17 +1065,57 @@ def _default_timeseries_forecast_horizon(y_train: pd.Series, y_test: pd.Series) 
     return max(len(y_test), min(12, max(6, len(y_train) // 4)))
 
 
-def _image_payload(image_base64: str, native_source: str, fallback_used: bool = False) -> dict:
-    return {
-        "render_mode": "image",
-        "base64_image": image_base64,
-        "image_format": "png",
-        "native_source": native_source,
-        "fallback_used": fallback_used,
-    }
+def _attach_render_metadata(
+    payload: dict,
+    *,
+    native_source: str,
+    fallback_used: bool = False,
+    native_attempted: bool | None = None,
+    native_reason: str | None = None,
+    fallback_reason: str | None = None,
+) -> dict:
+    payload.update(
+        {
+            "native_source": native_source,
+            "fallback_used": fallback_used,
+            "native_attempted": native_attempted,
+            "native_reason": native_reason,
+            "fallback_reason": fallback_reason,
+        }
+    )
+    return payload
 
 
-def _plotly_figure_payload(fig, native_source: str, fallback_used: bool = False) -> dict:
+def _image_payload(
+    image_base64: str,
+    native_source: str,
+    fallback_used: bool = False,
+    native_attempted: bool | None = None,
+    native_reason: str | None = None,
+    fallback_reason: str | None = None,
+) -> dict:
+    return _attach_render_metadata(
+        {
+            "render_mode": "image",
+            "base64_image": image_base64,
+            "image_format": "png",
+        },
+        native_source=native_source,
+        fallback_used=fallback_used,
+        native_attempted=native_attempted,
+        native_reason=native_reason,
+        fallback_reason=fallback_reason,
+    )
+
+
+def _plotly_figure_payload(
+    fig,
+    native_source: str,
+    fallback_used: bool = False,
+    native_attempted: bool | None = None,
+    native_reason: str | None = None,
+    fallback_reason: str | None = None,
+) -> dict:
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="white",
@@ -1073,13 +1123,18 @@ def _plotly_figure_payload(fig, native_source: str, fallback_used: bool = False)
         margin=dict(l=50, r=30, t=70, b=50),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
     )
-    return {
-        "render_mode": "plotly",
-        "plotly_figure_json": fig.to_json(),
-        "image_format": "plotly",
-        "native_source": native_source,
-        "fallback_used": fallback_used,
-    }
+    return _attach_render_metadata(
+        {
+            "render_mode": "plotly",
+            "plotly_figure_json": fig.to_json(),
+            "image_format": "plotly",
+        },
+        native_source=native_source,
+        fallback_used=fallback_used,
+        native_attempted=native_attempted,
+        native_reason=native_reason,
+        fallback_reason=fallback_reason,
+    )
 
 
 def _build_timeseries_residual_plot(context: dict, model) -> dict:
@@ -1609,6 +1664,10 @@ def _has_umap() -> bool:
     return importlib.util.find_spec("umap") is not None
 
 
+def _has_interpret_community() -> bool:
+    return importlib.util.find_spec("interpret_community") is not None
+
+
 def _resolve_tsne_perplexity(n_samples: int) -> int:
     if n_samples < 2:
         raise ValueError("t-SNE plot requires at least 2 samples.")
@@ -1786,34 +1845,90 @@ def _resolve_classification_predictor(model):
     return model.predict, False
 
 
-def _try_native_interpret_plot(context: dict, model, plot_type: str, use_train_data: bool, feature_name: str | None = None) -> dict | None:
+def _candidate_native_dependence_features(features: pd.DataFrame | None) -> list[str]:
+    if features is None or not len(features.columns):
+        return []
+    numeric_candidates = []
+    fallback_candidates = []
+    for column in features.columns:
+        series = pd.to_numeric(features[column], errors="coerce")
+        if series.notna().sum() > 1:
+            numeric_candidates.append(str(column))
+        else:
+            fallback_candidates.append(str(column))
+    ordered = []
+    seen = set()
+    for name in numeric_candidates + fallback_candidates:
+        if name not in seen:
+            ordered.append(name)
+            seen.add(name)
+    return ordered
+
+
+def _native_xai_support(context: dict, plot_type: str) -> tuple[bool, str]:
+    if context["module_type"] not in {"classification", "regression"}:
+        return False, "interpret_model()은 현재 분류와 회귀 모듈에서만 사용합니다."
+    if plot_type == "pfi" and not _has_interpret_community():
+        return False, "interpret_community 패키지가 없어 native PFI를 사용할 수 없습니다."
+    if plot_type not in {"summary", "dependence", "pfi"}:
+        return False, f"native interpret_model() 미지원 XAI 항목입니다: {plot_type}"
+    return True, "interpret_model()을 우선 시도합니다."
+
+
+def _try_native_interpret_plot(context: dict, model, plot_type: str, use_train_data: bool, features: pd.DataFrame | None = None) -> tuple[dict | None, str]:
     native_plot_map = {
         "summary": "summary",
         "dependence": "correlation",
         "pfi": "pfi",
     }
     native_plot = native_plot_map.get(plot_type)
-    if not native_plot or context["module_type"] not in {"classification", "regression"}:
-        return None
+    supported, support_reason = _native_xai_support(context, plot_type)
+    if not native_plot or not supported:
+        return None, support_reason
 
     pc = context["pc"]
-    kwargs = {
-        "plot": native_plot,
-        "save": True,
-        "use_train_data": use_train_data,
-    }
-    if native_plot == "correlation" and feature_name:
-        kwargs["feature"] = feature_name
+    feature_candidates = [None]
+    if native_plot == "correlation":
+        feature_candidates = _candidate_native_dependence_features(features)
+        if not feature_candidates:
+            return None, "native dependence plot에 사용할 feature 후보가 없습니다."
 
-    _clear_generated_plot_files()
-    try:
-        pc.interpret_model(model, **kwargs)
-        image_base64 = _read_latest_png()
-        if image_base64:
-            return _image_payload(image_base64, native_source="interpret_model", fallback_used=False)
-    except Exception:
-        return None
-    return None
+    errors = []
+    for feature_name in feature_candidates:
+        kwargs = {
+            "plot": native_plot,
+            "save": True,
+            "use_train_data": use_train_data,
+        }
+        if native_plot == "correlation" and feature_name:
+            kwargs["feature"] = feature_name
+
+        _clear_generated_plot_files()
+        try:
+            pc.interpret_model(model, **kwargs)
+            image_base64 = _read_latest_png()
+            if image_base64:
+                reason = f"interpret_model(plot='{native_plot}') 성공"
+                if feature_name:
+                    reason += f" / feature={feature_name}"
+                return (
+                    _image_payload(
+                        image_base64,
+                        native_source="interpret_model",
+                        fallback_used=False,
+                        native_attempted=True,
+                        native_reason=reason,
+                    ),
+                    reason,
+                )
+            errors.append(f"{feature_name or native_plot}: PNG 출력 없음")
+        except Exception as exc:
+            if feature_name:
+                errors.append(f"{feature_name}: {exc}")
+            else:
+                errors.append(str(exc))
+
+    return None, " / ".join(errors[:3]) if errors else support_reason
 
 
 def get_interpret_plot(
@@ -1831,17 +1946,25 @@ def get_interpret_plot(
     target_key = "y_train" if use_train_data or not supervised else "y_test"
     features = pc.get_config(original_features_key)
     xai_model, xai_features = _resolve_xai_model_and_features(context, model, use_train_data)
+    native_support, native_support_reason = _native_xai_support(context, plot_type)
 
     if features is None or len(features) == 0 or len(xai_features) == 0:
-        return _image_payload("", native_source="custom_xai_empty", fallback_used=True)
+        return _image_payload(
+            "",
+            native_source="custom_xai_empty",
+            fallback_used=True,
+            native_attempted=native_support,
+            native_reason=native_support_reason if native_support else None,
+            fallback_reason="XAI에 사용할 feature frame이 비어 있습니다.",
+        )
 
-    native_feature_name = None
-    if plot_type == "dependence" and features is not None and len(features.columns):
-        native_feature_name = str(features.columns[0])
-
-    native_payload = _try_native_interpret_plot(context, model, plot_type, use_train_data, native_feature_name)
+    native_payload, native_failure_reason = _try_native_interpret_plot(context, model, plot_type, use_train_data, features)
     if native_payload is not None:
         return native_payload
+
+    fallback_reason = native_failure_reason or (
+        native_support_reason if not native_support else "native interpret_model() 결과를 확보하지 못했습니다."
+    )
 
     if plot_type == "summary":
         if context["module_type"] == "classification":
@@ -1870,7 +1993,14 @@ def get_interpret_plot(
         plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#38bdf8")
         plt.title("SHAP Summary Importance")
         plt.xlabel("Mean |SHAP value|")
-        return _image_payload(_figure_to_base64(), native_source="custom_xai_summary", fallback_used=True)
+        return _image_payload(
+            _figure_to_base64(),
+            native_source="custom_xai_summary",
+            fallback_used=True,
+            native_attempted=native_support,
+            native_reason=native_support_reason if native_support else None,
+            fallback_reason=fallback_reason,
+        )
 
     if plot_type == "dependence":
         if context["module_type"] == "classification":
@@ -1904,50 +2034,47 @@ def get_interpret_plot(
         plt.title(f"SHAP Dependence: {_sanitize_column_name(feature_name)}")
         plt.xlabel(_sanitize_column_name(feature_name))
         plt.ylabel("SHAP value")
-        return _image_payload(_figure_to_base64(), native_source="custom_xai_dependence", fallback_used=True)
+        return _image_payload(
+            _figure_to_base64(),
+            native_source="custom_xai_dependence",
+            fallback_used=True,
+            native_attempted=native_support,
+            native_reason=native_support_reason if native_support else None,
+            fallback_reason=fallback_reason,
+        )
 
     if plot_type == "pfi":
         if not supervised:
             raise ValueError("Permutation importance is only supported for classification and regression experiments")
-        if context["module_type"] == "classification":
-            source_features = pc.get_config(original_features_key)
-            target = pc.get_config(target_key)
-            if source_features is None or target is None or len(source_features) == 0:
-                raise ValueError("Permutation importance를 계산할 분류 데이터가 없습니다.")
-
-            label_col = "prediction_label"
-            baseline_predictions = pc.predict_model(model, data=source_features.copy())
-            baseline_score = accuracy_score(target, baseline_predictions[label_col])
-            importances = []
-            for column in source_features.columns:
-                deltas = []
-                for repeat in range(3):
-                    permuted = source_features.copy()
-                    permuted[column] = permuted[column].sample(frac=1, random_state=42 + repeat).to_numpy()
-                    permuted_predictions = pc.predict_model(model, data=permuted)
-                    score = accuracy_score(target, permuted_predictions[label_col])
-                    deltas.append(baseline_score - score)
-                importances.append(float(np.mean(deltas)))
-            ranked = (
-                pd.Series(importances, index=source_features.columns)
-                .sort_values(ascending=False)
-                .head(12)
-                .sort_values(ascending=True)
-            )
-        else:
-            target = pc.get_config(target_key)
-            scores = permutation_importance(model, features, np.ravel(target), n_repeats=5, random_state=42, n_jobs=1)
-            ranked = (
-                pd.Series(scores.importances_mean, index=features.columns)
-                .sort_values(ascending=False)
-                .head(12)
-                .sort_values(ascending=True)
-            )
+        target = pc.get_config(target_key)
+        if target is None or len(xai_features) == 0:
+            raise ValueError("Permutation importance를 계산할 데이터가 없습니다.")
+        scores = permutation_importance(
+            xai_model,
+            xai_features,
+            np.ravel(target),
+            n_repeats=5,
+            random_state=42,
+            n_jobs=1,
+        )
+        ranked = (
+            pd.Series(scores.importances_mean, index=xai_features.columns)
+            .sort_values(ascending=False)
+            .head(12)
+            .sort_values(ascending=True)
+        )
         plt.figure(figsize=(10, 6))
         plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#22c55e")
         plt.title("Permutation Feature Importance")
         plt.xlabel("Mean importance")
-        return _image_payload(_figure_to_base64(), native_source="custom_xai_pfi", fallback_used=True)
+        return _image_payload(
+            _figure_to_base64(),
+            native_source="custom_xai_pfi",
+            fallback_used=True,
+            native_attempted=native_support,
+            native_reason=native_support_reason if native_support else None,
+            fallback_reason=fallback_reason,
+        )
 
     raise ValueError(f"Unsupported XAI plot type: {plot_type}")
 
@@ -2004,16 +2131,24 @@ def list_plot_options(module_type: str) -> dict:
             option("pacf", "PACF", "plot", "native", True, True, "Uses native plot_model(return_fig=True) with PNG fallback."),
         ],
     }
+    pfi_native_available = _has_interpret_community()
+    pfi_source_preference = "native" if pfi_native_available else "fallback"
+    pfi_notes = (
+        "interpret_model(plot='pfi')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."
+        if pfi_native_available
+        else "interpret_community 패키지가 없어 앱 fallback PFI를 기본 경로로 사용합니다."
+    )
+
     xai_plots = {
         "classification": [
             option("summary", "SHAP 요약", "xai", "native", True, True, "interpret_model(plot='summary')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
             option("dependence", "SHAP 의존도", "xai", "native", True, True, "interpret_model(plot='correlation')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
-            option("pfi", "Permutation 중요도", "xai", "native", True, True, "interpret_model(plot='pfi')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
+            option("pfi", "Permutation 중요도", "xai", pfi_source_preference, pfi_native_available, True, pfi_notes),
         ],
         "regression": [
             option("summary", "SHAP 요약", "xai", "native", True, True, "interpret_model(plot='summary')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
             option("dependence", "SHAP 의존도", "xai", "native", True, True, "interpret_model(plot='correlation')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
-            option("pfi", "Permutation 중요도", "xai", "native", True, True, "interpret_model(plot='pfi')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
+            option("pfi", "Permutation 중요도", "xai", pfi_source_preference, pfi_native_available, True, pfi_notes),
         ],
     }
     return {

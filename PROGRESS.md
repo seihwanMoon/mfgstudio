@@ -37,6 +37,7 @@ All planned tasks are currently complete.
 - 2026-03-13: cleaned remaining high-traffic mojibake across Home, Compare, Setup module selection, and Predict screens without changing the underlying flows.
 - 2026-03-13: normalized setup basic/preprocessing forms and upload preview/quality/type tables to Korean for consistent data onboarding copy.
 - 2026-03-13: normalized Plots/XAI workspace copy, source badges, train/test toggle labels, and SHAP helper text to Korean.
+- 2026-03-13: improved XAI native-first handling so `summary`, `dependence`, and `pfi` now return explicit native/fallback reasons, retry dependence across candidate features, and rebuild the PyCaret setup when experiment pickle restore fails.
 - 2026-03-13: fixed XAI `summary`, `dependence`, and individual SHAP failures caused by SHAP/raw-pipeline schema mismatches.
 - 2026-03-13: split the old Analyze flow into dedicated `Plots` and `XAI` workspaces.
 - 2026-03-13: cleaned several mojibake-heavy navigation and XAI panel labels.

@@ -86,6 +86,7 @@ Current state:
 - Home, Compare, Setup module selection, and Predict high-traffic surfaces were also re-normalized to Korean
 - setup forms and upload/data-quality surfaces were also re-normalized to Korean
 - plots/XAI workspace guidance and SHAP-side helper labels were also re-normalized to Korean
+- XAI responses now expose why native `interpret_model()` succeeded or why fallback was used, and saved experiment restore now rebuilds setup when pickle compatibility fails
 - mixed-language and mojibake strings may still exist in lower-traffic or not-yet-revisited components
 
 Next work:

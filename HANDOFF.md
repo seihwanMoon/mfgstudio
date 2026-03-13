@@ -34,6 +34,7 @@ Latest completed work:
 - Home dashboard, compare leaderboard/options, setup module selector, and predict inputs/results/history were also re-normalized to Korean
 - Setup basic/preprocessing forms and upload preview/quality/type tables were also normalized to Korean
 - Plots/XAI workspace copy, source-path badges, SHAP helper text, and train/test toggle labels were also normalized to Korean
+- XAI plots now include explicit `native_reason` / `fallback_reason` metadata, and experiment activation now falls back to setup rebuild if saved PyCaret experiment pickle restore fails
 
 ## Current working tree
 

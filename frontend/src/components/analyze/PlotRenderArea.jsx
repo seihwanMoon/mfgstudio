@@ -108,6 +108,8 @@ export default function PlotRenderArea({
   nativeSource,
   fallbackUsed,
   sourcePreference,
+  nativeReason = "",
+  fallbackReason = "",
 }) {
   const modeLabel = getModeLabel(moduleType)
   const familyLabel = plotFamily === "xai" ? "XAI" : "진단 그래프"
@@ -132,6 +134,8 @@ export default function PlotRenderArea({
           <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
             {modeLabel} / {familyLabel} / 선호 경로: {sourcePreference === "native" ? "기본 경로 우선" : sourcePreference === "fallback" ? "대체 경로" : "정보 없음"} / 실제 경로: {nativeSource || "정보 없음"}
           </div>
+          {nativeReason ? <div style={{ color: "var(--text-muted)", fontSize: 12 }}>native: {nativeReason}</div> : null}
+          {fallbackReason ? <div style={{ color: "var(--warning)", fontSize: 12 }}>fallback: {fallbackReason}</div> : null}
         </div>
         <SourceBadge fallbackUsed={Boolean(fallbackUsed)} />
       </div>

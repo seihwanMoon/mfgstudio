@@ -28,7 +28,7 @@ export default function XAIPage() {
   const [image, setImage] = useState("")
   const [plotlyFigureJson, setPlotlyFigureJson] = useState("")
   const [renderMode, setRenderMode] = useState("image")
-  const [plotMeta, setPlotMeta] = useState({ nativeSource: "", fallbackUsed: false })
+  const [plotMeta, setPlotMeta] = useState({ nativeSource: "", fallbackUsed: false, nativeReason: "", fallbackReason: "" })
   const [rowIndex, setRowIndex] = useState(0)
   const [shapResult, setShapResult] = useState(null)
   const [useTrainData, setUseTrainData] = useState(false)
@@ -84,12 +84,14 @@ export default function XAIPage() {
       setPlotMeta({
         nativeSource: response.native_source || "",
         fallbackUsed: Boolean(response.fallback_used),
+        nativeReason: response.native_reason || "",
+        fallbackReason: response.fallback_reason || "",
       })
     } catch (error) {
       setImage("")
       setPlotlyFigureJson("")
       setRenderMode("image")
-      setPlotMeta({ nativeSource: "", fallbackUsed: false })
+      setPlotMeta({ nativeSource: "", fallbackUsed: false, nativeReason: "", fallbackReason: "" })
       setPlotError(error?.detail || "XAI 그래프를 생성하지 못했습니다.")
     } finally {
       setIsLoadingPlot(false)
@@ -216,6 +218,8 @@ export default function XAIPage() {
           nativeSource={plotMeta.nativeSource}
           fallbackUsed={plotMeta.fallbackUsed}
           sourcePreference={selectedPlot?.source_preference}
+          nativeReason={plotMeta.nativeReason}
+          fallbackReason={plotMeta.fallbackReason}
         />
       </div>
 

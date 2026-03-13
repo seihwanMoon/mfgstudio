@@ -23,7 +23,7 @@ export default function PlotsPage() {
   const [image, setImage] = useState("")
   const [plotlyFigureJson, setPlotlyFigureJson] = useState("")
   const [renderMode, setRenderMode] = useState("image")
-  const [plotMeta, setPlotMeta] = useState({ nativeSource: "", fallbackUsed: false })
+  const [plotMeta, setPlotMeta] = useState({ nativeSource: "", fallbackUsed: false, nativeReason: "", fallbackReason: "" })
   const [useTrainData, setUseTrainData] = useState(false)
   const [isLoadingPlot, setIsLoadingPlot] = useState(false)
   const [plotError, setPlotError] = useState("")
@@ -75,12 +75,14 @@ export default function PlotsPage() {
       setPlotMeta({
         nativeSource: response.native_source || "",
         fallbackUsed: Boolean(response.fallback_used),
+        nativeReason: response.native_reason || "",
+        fallbackReason: response.fallback_reason || "",
       })
     } catch (error) {
       setImage("")
       setPlotlyFigureJson("")
       setRenderMode("image")
-      setPlotMeta({ nativeSource: "", fallbackUsed: false })
+      setPlotMeta({ nativeSource: "", fallbackUsed: false, nativeReason: "", fallbackReason: "" })
       setPlotError(error?.detail || "진단 그래프를 생성하지 못했습니다.")
     } finally {
       setIsLoadingPlot(false)
@@ -186,6 +188,8 @@ export default function PlotsPage() {
           nativeSource={plotMeta.nativeSource}
           fallbackUsed={plotMeta.fallbackUsed}
           sourcePreference={selectedPlot?.source_preference}
+          nativeReason={plotMeta.nativeReason}
+          fallbackReason={plotMeta.fallbackReason}
         />
       </div>
     </div>
