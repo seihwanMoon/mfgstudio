@@ -128,6 +128,13 @@ Next work:
 4. Continue copy cleanup and UX polish
 5. Add more module-specific runtime validation, especially time-series and clustering
 
+## Immediate next implementation
+
+1. Add report-safe representative charts for time-series.
+2. Add report-safe representative charts for clustering or anomaly, but only where image output is stable.
+3. Revisit XAI native-first support table by estimator and record which combinations should stay fallback.
+4. If fallback state is useful operationally, expose `mlflow_synced` in `MLflow > 운영 관리`.
+
 ## Notes
 
 - No hard blocker is currently identified in code.

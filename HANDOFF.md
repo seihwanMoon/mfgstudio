@@ -4,133 +4,99 @@ Last updated: 2026-03-13
 
 ## Summary
 
-The project is currently in a `PyCaret-native-first cleanup + automatic reporting + plots/XAI split` phase.
+현재 프로젝트는 `PyCaret native-first 정리 + 자동 보고서 고도화 + 운영 관리 정리` 단계에 있습니다.
 
-Latest completed work:
+최근 기준 커밋:
 
-- automatic PDF report generation after `finalize`
-- report API expansion with `meta` and `generate`
-- Finalize UI report link exposure
-- analyze payload metadata with `native_source` and `fallback_used`
-- plot catalog metadata describing native-first vs fallback intent
-- Production stage / rollback report refresh
-- XAI `summary`, `dependence`, and individual SHAP repaired for PyCaret pipeline models
-- native-first `interpret_model()` attempts added for `summary`, `dependence`, and `pfi`, with graceful fallback when PyCaret native output is unavailable
-- the old Analyze screen split into separate `Plots` and `XAI` routes
-- app shell, sidebar, header, plots/XAI, Tune, Finalize, MLflow, and remaining high-traffic panels re-localized to Korean after the route split
-- automatic report generation repaired by pinning `pydyf<0.11` alongside `weasyprint==61.2`
-- real-model report smoke test completed for `model_id=665` with successful `meta`, `generate`, and PDF download responses
-- PDF report content expanded with KPI overview cards, workflow chips, dataset column profile, compare/tune summary, and artifact inventory
-- Finalize page and pipeline summary copy re-normalized to Korean
-- `MLflow` page now includes an `운영 관리` tab for experiment archive/delete safety checks and report management
-- report files can now be reopened, regenerated, and deleted from the management UI; experiments can be archived and only non-operational experiments are hard-deletable
-- `은퇴 정리` now exists for registered/finalized models; it archives the stage first and conditionally cleans MLflow version + model artifact when prediction history is absent
-- `운영 관리` now has client-side search/filter for both experiment cleanup and report/model management lists
-- `은퇴 정리` now runs through a dry-run preview first so the operator can see projected cleanup actions and remaining experiment-delete blockers before execution
-- `운영 관리` now also supports bulk archive for filtered experiments and bulk regeneration for missing report PDFs
-- Finalize / Registry / MLflow log panels were re-normalized to Korean after additional mojibake cleanup
-- Finalize now exposes a direct report-open link after Production stage changes and rollback-triggered report refreshes
-- report service labels and the PDF template were normalized to Korean so generated PDFs match the product UI again
-- Home dashboard, compare leaderboard/options, setup module selector, and predict inputs/results/history were also re-normalized to Korean
-- Setup basic/preprocessing forms and upload preview/quality/type tables were also normalized to Korean
-- Plots/XAI workspace copy, source-path badges, SHAP helper text, and train/test toggle labels were also normalized to Korean
-- XAI plots now include explicit `native_reason` / `fallback_reason` metadata, and experiment activation now falls back to setup rebuild if saved PyCaret experiment pickle restore fails
-- PDF reports now embed representative analysis artifacts when a report-safe image payload is available, starting with module-appropriate plots such as residual diagnostics and SHAP summary charts
-- MLflow-dependent finalize/registry flows now fall back to local metadata quickly when the configured tracking host is unreachable, instead of blocking or failing the product flow
-- Finalize now shows when MLflow sync fell back to app-managed metadata, and the registry/stage UI copy was re-normalized to Korean while surfacing the refreshed report link
+- `8b5fd2f` `feat: enrich reports and harden mlflow fallbacks`
+- `3b145bc` `feat: surface mlflow fallback status in finalize`
+
+핵심 완료 항목:
+
+- `Analyze`를 `Plots` / `XAI`로 분리
+- XAI `summary` / `dependence` / `pfi`에 `interpret_model()` 우선 시도 + fallback 이유 노출
+- `finalize` 직후 PDF 자동 생성
+- Production stage 변경 / rollback 시 보고서 재생성
+- `MLflow > 운영 관리`에서 실험 보관, 안전 삭제 판정, 보고서 재생성/삭제, 은퇴 preview/workflow 지원
+- PDF 보고서에 KPI, workflow, dataset profile, compare/tune summary, artifact inventory 추가
+- PDF 보고서에 대표 분석 산출물 삽입 시작
+- MLflow 서버가 닿지 않아도 `finalize -> register -> Production` 흐름이 앱 기준 fallback으로 계속 진행되도록 보강
+- Finalize 화면에서 `mlflow_synced` fallback 상태와 보고서 링크를 명시적으로 노출
 
 ## Current working tree
 
-Main files touched in the latest cycle:
+현재 추적 파일 기준 워크트리는 깨끗합니다.
 
-- [IMPLEMENTATION_PLAN_PYCARET_NATIVE_REPORTS.md](D:/GITHUB/mfgstudio/IMPLEMENTATION_PLAN_PYCARET_NATIVE_REPORTS.md)
-- [backend/services/report_service.py](D:/GITHUB/mfgstudio/backend/services/report_service.py)
-- [backend/routers/report.py](D:/GITHUB/mfgstudio/backend/routers/report.py)
-- [backend/routers/train.py](D:/GITHUB/mfgstudio/backend/routers/train.py)
-- [backend/routers/registry.py](D:/GITHUB/mfgstudio/backend/routers/registry.py)
+- 미추적 파일: `logs.log`
+
+## Main files
+
+최근 사이클 핵심 파일:
+
 - [backend/services/pycaret_service.py](D:/GITHUB/mfgstudio/backend/services/pycaret_service.py)
 - [backend/services/report_service.py](D:/GITHUB/mfgstudio/backend/services/report_service.py)
+- [backend/services/mlflow_service.py](D:/GITHUB/mfgstudio/backend/services/mlflow_service.py)
+- [backend/routers/train.py](D:/GITHUB/mfgstudio/backend/routers/train.py)
+- [backend/routers/registry.py](D:/GITHUB/mfgstudio/backend/routers/registry.py)
 - [backend/templates/report.html](D:/GITHUB/mfgstudio/backend/templates/report.html)
-- [frontend/src/App.jsx](D:/GITHUB/mfgstudio/frontend/src/App.jsx)
-- [frontend/src/pages/AnalyzePage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/AnalyzePage.jsx)
-- [frontend/src/pages/PlotsPage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/PlotsPage.jsx)
-- [frontend/src/pages/XAIPage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/XAIPage.jsx)
-- [frontend/src/components/analyze/PlotSelector.jsx](D:/GITHUB/mfgstudio/frontend/src/components/analyze/PlotSelector.jsx)
-- [frontend/src/components/analyze/PlotRenderArea.jsx](D:/GITHUB/mfgstudio/frontend/src/components/analyze/PlotRenderArea.jsx)
-- [frontend/src/components/analyze/ShapIndexSelector.jsx](D:/GITHUB/mfgstudio/frontend/src/components/analyze/ShapIndexSelector.jsx)
-- [frontend/src/components/analyze/ShapWaterfall.jsx](D:/GITHUB/mfgstudio/frontend/src/components/analyze/ShapWaterfall.jsx)
-- [frontend/src/components/layout/AppShell.jsx](D:/GITHUB/mfgstudio/frontend/src/components/layout/AppShell.jsx)
-- [frontend/src/components/layout/Sidebar.jsx](D:/GITHUB/mfgstudio/frontend/src/components/layout/Sidebar.jsx)
-- [frontend/src/components/layout/Header.jsx](D:/GITHUB/mfgstudio/frontend/src/components/layout/Header.jsx)
-- [frontend/src/pages/TunePage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/TunePage.jsx)
-- [frontend/src/components/tune/TuneOptionsPanel.jsx](D:/GITHUB/mfgstudio/frontend/src/components/tune/TuneOptionsPanel.jsx)
-- [frontend/src/components/tune/ModelSelectFromCompare.jsx](D:/GITHUB/mfgstudio/frontend/src/components/tune/ModelSelectFromCompare.jsx)
-- [frontend/src/components/tune/TuneBeforeAfter.jsx](D:/GITHUB/mfgstudio/frontend/src/components/tune/TuneBeforeAfter.jsx)
-- [frontend/src/components/tune/HyperparamsDiff.jsx](D:/GITHUB/mfgstudio/frontend/src/components/tune/HyperparamsDiff.jsx)
 - [frontend/src/pages/FinalizePage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/FinalizePage.jsx)
 - [frontend/src/components/finalize/SaveModelForm.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/SaveModelForm.jsx)
 - [frontend/src/components/finalize/MLflowRegisterForm.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/MLflowRegisterForm.jsx)
-- [frontend/src/components/finalize/PipelineSummary.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/PipelineSummary.jsx)
-- [frontend/src/components/finalize/SelectedModelCard.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/SelectedModelCard.jsx)
 - [frontend/src/components/finalize/StageManager.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/StageManager.jsx)
-- [frontend/src/components/finalize/VersionTimeline.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/VersionTimeline.jsx)
-- [frontend/src/components/finalize/StageManager.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/StageManager.jsx)
-- [frontend/src/components/finalize/MLflowRegisterForm.jsx](D:/GITHUB/mfgstudio/frontend/src/components/finalize/MLflowRegisterForm.jsx)
-- [frontend/src/components/mlflow/ModelRegistryList.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/ModelRegistryList.jsx)
-- [frontend/src/pages/MLflowPage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/MLflowPage.jsx)
-- [frontend/src/components/mlflow/ExperimentCompareView.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/ExperimentCompareView.jsx)
-- [frontend/src/components/mlflow/ExperimentLogTable.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/ExperimentLogTable.jsx)
-- [frontend/src/components/mlflow/ModelRegistryList.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/ModelRegistryList.jsx)
-- [frontend/src/components/mlflow/ScheduleManager.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/ScheduleManager.jsx)
+- [PROGRESS.md](D:/GITHUB/mfgstudio/PROGRESS.md)
+- [NEXT_DEVELOPMENT_PLAN.md](D:/GITHUB/mfgstudio/NEXT_DEVELOPMENT_PLAN.md)
 
 ## Verified
 
+검증 완료 항목:
+
 - `python -m py_compile backend/services/report_service.py backend/routers/report.py backend/routers/train.py backend/services/pycaret_service.py`
-- `python -m py_compile backend/routers/ops.py backend/main.py`
+- `python -m py_compile backend/services/mlflow_service.py backend/routers/registry.py`
 - `npm run build`
-- `docker compose up --build -d backend frontend`
-- direct API validation:
-  - `POST /api/analyze/plot` returns `200` for `summary`, `dependence`, and `pfi`
-  - `POST /api/analyze/interpret` returns `200` for individual SHAP
-  - `GET /api/report/665/meta` returns `200`
-  - `POST /api/report/665/generate` returns `200`
-  - `GET /api/report/665` returns `200` with `application/pdf`
-  - `build_report_context(model_id=665)` now returns `report_charts=2` (`잔차 플롯`, `SHAP 요약`) for the saved regression model smoke test
-  - regenerated enriched PDF for `model_id=665`; response size increased to roughly `100 KB`, confirming the richer template is being used
-  - `POST /api/train/finalize/679` returns `200` with `report_generated=True`, `report_exists=True`, and `mlflow_synced=False` when the configured MLflow host is unreachable
-  - `POST /api/registry/register` returns `200` for that newly finalized model using DB-backed fallback versioning when MLflow is unreachable
-  - `PUT /api/registry/{model_name}/stage` returns `200` and refreshes the Production report for the same newly finalized model
-  - `GET /api/ops/experiments` returns `200`
-  - `GET /api/ops/reports` returns `200`
-  - `GET /api/ops/models/{model_id}/retire-preview` returns `200`
-  - local/runtime checks confirmed `MlflowClient` exposes `delete_model_version` and `delete_registered_model` for the retirement workflow
-- frontend container content validation:
-  - `frontend/src/components/layout/AppShell.jsx`
-  - `frontend/src/components/layout/Sidebar.jsx`
-  - `frontend/src/components/layout/Header.jsx`
-  now contain Korean labels inside the running container
+- `GET /api/report/665/meta` -> `200`
+- `POST /api/report/665/generate` -> `200`
+- `GET /api/report/665` -> `200`
+- `build_report_context(model_id=665)` 에서 대표 차트 2개 확인
+- `POST /api/train/finalize/679` -> `200`
+- `POST /api/registry/register` -> `200`
+- `PUT /api/registry/{model_name}/stage` -> `200`
 
-Runtime caveat:
+실검증 결과:
 
-- native `interpret_model()` still falls back for some estimators or environments because PyCaret restricts certain plots and `pfi` depends on `interpret_community`
-- finalize/report/Production refresh is now validated for a newly finalized regression model in-session, but additional coverage for time-series and clustering should still be added
-- retirement endpoints were validated non-destructively; no real registered version or finalized artifact was retired during verification in this session
+- 저장된 회귀 모델 `665` 기준으로 enriched PDF 재생성 확인
+- 신규 finalize 모델 `679` 기준으로 `finalize -> register -> Production` 흐름 확인
+- MLflow 미연결 상태에서는 `mlflow_synced=false`로 fallback 처리됨
+
+## Runtime caveats
+
+- `interpret_model()`은 estimator / 환경에 따라 계속 fallback 될 수 있음
+- `pfi` native 경로는 `interpret_community` 의존성이 있음
+- 대표 차트는 현재 회귀 흐름 검증이 가장 탄탄하고, time-series / clustering은 추가 검증 필요
+- 보고서 차트 생성은 실패해도 PDF 전체가 실패하지 않도록 유지해야 함
 
 ## Current focus
 
-1. Continue reducing custom XAI behavior where `interpret_model()` is viable.
-2. Expand report-safe chart coverage to more module types, especially time-series and clustering, without making PDF generation brittle.
-3. Keep fallback paths explicit and visible in API responses and UI.
-4. Clean up the last mixed-language and mojibake UI copy outside the refreshed high-traffic flows.
-5. Decide whether report history and MLflow fallback state should become first-class UI metadata.
+1. XAI custom 경로를 더 줄이고 `interpret_model()` 가능 범위를 넓히기
+2. 보고서용 안전 차트를 time-series / clustering까지 확장하기
+3. `mlflow_synced` / fallback 상태를 운영 화면까지 노출할지 결정하기
+4. 남은 혼합 언어 / mojibake UI 문구를 정리하기
+5. 필요하면 보고서 히스토리 메타데이터를 별도 관리할지 결정하기
 
 ## Recommended next steps
 
-1. Verify `/plots`, `/xai`, `/tune`, `/finalize`, and the left navigation in the browser after a hard refresh.
-2. Run a fresh classification or regression experiment through `finalize`.
-3. Confirm the generated PDF opens from both the Finalize screen and `MLflow > 운영 관리`.
-4. Promote the model to `Production` and verify report refresh on stage change.
-5. Decide which additional module-specific charts should be persisted for report reuse next.
+1. [NEXT_DEVELOPMENT_PLAN.md](D:/GITHUB/mfgstudio/NEXT_DEVELOPMENT_PLAN.md)의 `P1`과 `P3`부터 이어서 진행
+2. [backend/services/pycaret_service.py](D:/GITHUB/mfgstudio/backend/services/pycaret_service.py)에서 module/estimator별 native XAI 가능 범위 정리
+3. [backend/services/report_service.py](D:/GITHUB/mfgstudio/backend/services/report_service.py)에 time-series / clustering 대표 차트 추가
+4. [frontend/src/pages/MLflowPage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/MLflowPage.jsx) 또는 운영 관리 컴포넌트에 `mlflow_synced` fallback 상태 노출 여부 검토
+5. 브라우저에서 `/finalize`, `/plots`, `/xai`, `/mlflow` 재확인
+
+## Resume checklist
+
+1. PyCaret native 결과가 불안정하면 숨기지 말고 fallback 이유를 남길 것
+2. 보고서 차트는 `image payload`가 안전하게 확보되는 경우만 포함할 것
+3. MLflow가 닿지 않아도 사용자 흐름이 끊기지 않게 유지할 것
+4. destructive 동작은 운영 자산에 영향이 없는지 먼저 확인할 것
+5. `logs.log`는 별도 요청이 없으면 무시할 것
 
 ## Useful commands
 
@@ -138,17 +104,6 @@ Runtime caveat:
 cd D:\GITHUB\mfgstudio
 git status --short
 npm run build --prefix frontend
-@'
-import py_compile
-for path in [
-    r"backend/services/report_service.py",
-    r"backend/routers/report.py",
-    r"backend/routers/train.py",
-    r"backend/services/pycaret_service.py",
-]:
-    py_compile.compile(path, doraise=True)
-    print("OK", path)
-'@ | python -
-
+python -m py_compile backend/services/report_service.py backend/services/mlflow_service.py backend/services/pycaret_service.py backend/routers/train.py backend/routers/registry.py
 docker compose up --build -d backend frontend
 ```
