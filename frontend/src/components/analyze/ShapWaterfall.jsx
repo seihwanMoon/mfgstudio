@@ -17,7 +17,7 @@ export default function ShapWaterfall({ result, moduleType }) {
       >
         아직 SHAP 결과가 생성되지 않았습니다.
         <br />
-        행 번호를 선택한 뒤 설명을 실행하세요.
+        행 번호를 선택한 뒤 설명을 실행해 주세요.
       </div>
     )
   }

@@ -85,6 +85,7 @@ Current state:
 - Finalize stage management, registry registration, MLflow logs, and report labels were re-normalized after additional mojibake cleanup
 - Home, Compare, Setup module selection, and Predict high-traffic surfaces were also re-normalized to Korean
 - setup forms and upload/data-quality surfaces were also re-normalized to Korean
+- plots/XAI workspace guidance and SHAP-side helper labels were also re-normalized to Korean
 - mixed-language and mojibake strings may still exist in lower-traffic or not-yet-revisited components
 
 Next work:

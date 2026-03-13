@@ -30,7 +30,7 @@ export default function PlotSelector({
   onChange,
   onRefresh,
   title = "분석 옵션",
-  description = "가능하면 PyCaret 기본 렌더링을 우선 사용합니다. 대체 경로 항목은 별도로 표시해 실제 사용 경로를 바로 확인할 수 있습니다.",
+  description = "가능하면 PyCaret 기본 렌더링을 우선 사용합니다. 대체 경로 항목은 별도로 표시되어 실제 사용 경로를 바로 확인할 수 있습니다.",
   emptyMessage = "사용 가능한 분석 항목이 없습니다.",
   buttonLabel = "그래프 새로고침",
 }) {

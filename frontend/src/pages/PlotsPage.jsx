@@ -95,7 +95,7 @@ export default function PlotsPage() {
         onChange={setSelectedPlotKey}
         onRefresh={handlePlot}
         title="그래프"
-        description="튜닝 이후 확인하는 진단 그래프를 이 화면으로 모아, PyCaret 스타일의 plot_model 흐름을 한 곳에서 볼 수 있도록 구성했습니다."
+        description="튜닝 이후 확인하는 진단 그래프를 한 화면으로 모아, PyCaret 스타일의 plot_model 흐름과 가깝게 볼 수 있도록 구성했습니다."
         emptyMessage="이 모듈에서 사용할 수 있는 진단 그래프가 없습니다."
         buttonLabel="그래프 새로고침"
       />

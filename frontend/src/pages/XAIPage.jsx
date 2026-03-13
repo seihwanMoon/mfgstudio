@@ -125,7 +125,7 @@ export default function XAIPage() {
         onChange={setSelectedPlotKey}
         onRefresh={handlePlot}
         title="XAI"
-        description="설명용 그래프를 진단 그래프와 분리해, 이후 XAI 기능을 독립적으로 확장할 수 있도록 구성했습니다."
+        description="설명 그래프를 진단 그래프와 분리해 두고, 이후 XAI 기능을 독립적으로 확장할 수 있도록 구성했습니다."
         emptyMessage="이 모듈에서 사용할 수 있는 XAI 그래프가 없습니다."
         buttonLabel="XAI 새로고침"
       />
@@ -145,7 +145,7 @@ export default function XAIPage() {
           <div>
             <div style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 700, marginBottom: 4 }}>XAI 작업공간</div>
             <div style={{ color: "var(--text-primary)", fontSize: 14, lineHeight: 1.6 }}>
-              전역 설명 그래프와 행 단위 SHAP 확인 기능을 이 화면에 모았습니다. 학습 진단 그래프와 분리해 XAI 기능을 별도로 확장할 수 있습니다.
+              전역 설명 그래프와 행 단위 SHAP 확인 기능을 한 화면에 모았습니다. 학습 진단 그래프와 분리해 XAI 기능을 별도로 확장할 수 있습니다.
             </div>
           </div>
 
@@ -243,8 +243,8 @@ export default function XAIPage() {
           disabled={!isShapSupported}
           helperText={
             isShapSupported
-              ? "개별 설명을 확인할 행 번호를 입력하세요. 0은 첫 번째 샘플입니다."
-              : "이 모듈은 아직 개별 SHAP를 지원하지 않습니다. 왼쪽의 설명 그래프를 사용하세요."
+              ? "개별 설명을 확인할 행 번호를 입력해 주세요. 0이 첫 번째 샘플입니다."
+              : "이 모듈은 아직 개별 SHAP를 지원하지 않습니다. 왼쪽의 설명 그래프를 사용해 주세요."
           }
         />
       </div>

@@ -130,7 +130,7 @@ export default function PlotRenderArea({
         <div style={{ display: "grid", gap: 4 }}>
           <div style={{ color: "var(--text-primary)", fontWeight: 800 }}>{plotLabel || "분석 그래프"}</div>
           <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
-            {modeLabel} / {familyLabel} / 선호 경로: {sourcePreference === "native" ? "기본 경로 우선" : sourcePreference === "fallback" ? "대체 경로" : "알 수 없음"} / 실제 경로: {nativeSource || "알 수 없음"}
+            {modeLabel} / {familyLabel} / 선호 경로: {sourcePreference === "native" ? "기본 경로 우선" : sourcePreference === "fallback" ? "대체 경로" : "정보 없음"} / 실제 경로: {nativeSource || "정보 없음"}
           </div>
         </div>
         <SourceBadge fallbackUsed={Boolean(fallbackUsed)} />

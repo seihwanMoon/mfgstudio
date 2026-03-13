@@ -11,7 +11,7 @@ export default function ShapIndexSelector({ value, onChange, onAnalyze, disabled
     >
       <div style={{ color: "var(--text-primary)", fontWeight: 700, marginBottom: 8 }}>개별 SHAP</div>
       <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
-        {helperText || "개별 설명을 확인할 행 번호를 입력하세요. 0은 첫 번째 샘플입니다."}
+        {helperText || "개별 설명을 확인할 행 번호를 입력해 주세요. 0이 첫 번째 샘플입니다."}
       </div>
       <input
         type="number"
