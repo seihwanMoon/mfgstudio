@@ -503,6 +503,14 @@ def ensure_experiment_context(
     context["experiment_name"] = experiment_name
     context["mlflow_experiment_id"] = metadata.get("mlflow_experiment_id", context.get("mlflow_experiment_id"))
     context["run_ids"] = metadata.get("run_ids", context.get("run_ids", {}))
+    context["pc"] = None
+    context.pop("name_to_id", None)
+    context.pop("id_to_name", None)
+    context.pop("input_example", None)
+    context["trained_models"] = {}
+    context["tuned_models"] = {}
+    context["final_models"] = {}
+    context["persisted_models"] = {"trained": {}, "tuned": {}, "final": {}}
     persisted_models = metadata.get("persisted_models", {})
     for bucket in MODEL_CONTEXT_KEYS:
         context.setdefault("persisted_models", {}).setdefault(bucket, {})
@@ -929,54 +937,66 @@ def _build_timeseries_custom_grid(model) -> dict:
                 unique_values.append(value)
         return unique_values
 
+    def _find_key(suffix: str) -> str | None:
+        matches = [key for key in params.keys() if key.endswith(suffix)]
+        if not matches:
+            return None
+        matches.sort(key=len)
+        return matches[0]
+
     candidate_grids: list[dict] = []
 
-    if "forecaster__model__window_length" in params:
-        value = int(params["forecaster__model__window_length"])
+    window_key = _find_key("__window_length")
+    if window_key:
+        value = int(params[window_key])
         candidate_grids.append(
             {
-                "forecaster__model__window_length": _unique(
+                window_key: _unique(
                     [max(2, value - 2), value, max(3, value + 2)]
                 )
             }
         )
-    if "forecaster__model__regressor__epsilon" in params:
-        value = float(params["forecaster__model__regressor__epsilon"])
+    epsilon_key = _find_key("__regressor__epsilon")
+    if epsilon_key:
+        value = float(params[epsilon_key])
         candidate_grids.append(
             {
-                "forecaster__model__regressor__epsilon": _unique(
+                epsilon_key: _unique(
                     [round(max(0.1, value * 0.75), 4), round(value, 4), round(value * 1.25, 4)]
                 )
             }
         )
-    if "forecaster__model__regressor__alpha" in params:
-        value = float(params["forecaster__model__regressor__alpha"])
+    alpha_key = _find_key("__regressor__alpha")
+    if alpha_key:
+        value = float(params[alpha_key])
         candidate_grids.append(
             {
-                "forecaster__model__regressor__alpha": _unique(
+                alpha_key: _unique(
                     [round(max(1e-6, value / 10), 6), round(value, 6), round(value * 10, 6)]
                 )
             }
         )
-    for boolean_key in (
-        "forecaster__model__robust",
-        "forecaster__model__use_box_cox",
-        "forecaster__model__use_arma_errors",
-        "forecaster__model__use_trend",
-        "forecaster__model__use_damped_trend",
+    for boolean_suffix in (
+        "__robust",
+        "__use_box_cox",
+        "__use_arma_errors",
+        "__use_trend",
+        "__use_damped_trend",
     ):
-        if boolean_key in params and (
+        boolean_key = _find_key(boolean_suffix)
+        if boolean_key and (
             isinstance(params[boolean_key], (bool, np.bool_)) or params.get(boolean_key) is None
         ):
             current = params.get(boolean_key)
             candidate_grids.append({boolean_key: _unique([current, True, False])})
 
-    if "forecaster__model__sp" in params:
-        value = params["forecaster__model__sp"]
+    sp_key = _find_key("__sp")
+    if sp_key:
+        value = params[sp_key]
         if isinstance(value, list):
-            candidate_grids.append({"forecaster__model__sp": [value]})
+            candidate_grids.append({sp_key: [value]})
         elif isinstance(value, (int, np.integer)) and int(value) > 1:
-            candidate_grids.append({"forecaster__model__sp": [int(value)]})
+            candidate_grids.append({sp_key: [int(value)]})
 
     for grid in candidate_grids:
         values = next(iter(grid.values()))
