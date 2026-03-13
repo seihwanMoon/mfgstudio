@@ -26,6 +26,8 @@ export default function AnalyzePage() {
   const [plotOptions, setPlotOptions] = useState([])
   const [selectedPlotKey, setSelectedPlotKey] = useState("")
   const [image, setImage] = useState("")
+  const [plotlyFigureJson, setPlotlyFigureJson] = useState("")
+  const [renderMode, setRenderMode] = useState("image")
   const [rowIndex, setRowIndex] = useState(0)
   const [shapResult, setShapResult] = useState(null)
   const [useTrainData, setUseTrainData] = useState(false)
@@ -75,9 +77,13 @@ export default function AnalyzePage() {
         use_train_data: useTrainData,
         row_index: rowIndex,
       })
+      setRenderMode(response.render_mode || "image")
       setImage(response.base64_image || "")
+      setPlotlyFigureJson(response.plotly_figure_json || "")
     } catch (error) {
       setImage("")
+      setPlotlyFigureJson("")
+      setRenderMode("image")
       setPlotError(error?.detail || "분석 플롯 생성 중 오류가 발생했습니다.")
     } finally {
       setIsLoadingPlot(false)
@@ -153,7 +159,7 @@ export default function AnalyzePage() {
               ))}
             </select>
 
-            <TrainTestToggle value={useTrainData} onChange={setUseTrainData} />
+            <TrainTestToggle value={useTrainData} onChange={setUseTrainData} moduleType={moduleType} />
           </div>
         </div>
 
@@ -172,7 +178,15 @@ export default function AnalyzePage() {
           </div>
         ) : null}
 
-        <PlotRenderArea image={image} isLoading={isLoadingPlot} plotLabel={selectedPlot?.label} plotFamily={selectedPlot?.family} moduleType={moduleType} />
+        <PlotRenderArea
+          image={image}
+          figureJson={plotlyFigureJson}
+          renderMode={renderMode}
+          isLoading={isLoadingPlot}
+          plotLabel={selectedPlot?.label}
+          plotFamily={selectedPlot?.family}
+          moduleType={moduleType}
+        />
       </div>
 
       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>

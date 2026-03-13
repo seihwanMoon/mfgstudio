@@ -45,7 +45,7 @@ def get_plot_view(payload: PlotRequest, db: Session = Depends(get_db)):
         experiment_name=experiment.name,
     )
     try:
-        image = (
+        plot_payload = (
             get_interpret_plot(
                 experiment.id,
                 model.algorithm,
@@ -61,12 +61,18 @@ def get_plot_view(payload: PlotRequest, db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"analyze plot failed: {exc}") from exc
 
+    if isinstance(plot_payload, str):
+        plot_payload = {
+            "render_mode": "image",
+            "base64_image": plot_payload,
+            "image_format": "png",
+        }
+
     return {
         "model_id": model.id,
         "plot_type": payload.plot_type,
         "plot_family": payload.plot_family,
-        "base64_image": image,
-        "image_format": "png",
+        **plot_payload,
     }
 
 

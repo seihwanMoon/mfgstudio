@@ -1024,6 +1024,44 @@ def _safe_timeseries_lags(series: pd.Series) -> int:
     return max(1, min(20, (n_obs // 2) - 1))
 
 
+def _default_timeseries_forecast_horizon(y_train: pd.Series, y_test: pd.Series) -> int:
+    inferred = None
+    try:
+        inferred = pd.infer_freq(y_train.index)
+    except Exception:
+        inferred = None
+
+    if inferred:
+        freq = inferred.upper()
+        if freq.startswith(("M", "MS", "ME")):
+            return max(len(y_test), 12)
+        if freq.startswith(("Q", "QS", "QE")):
+            return max(len(y_test), 8)
+        if freq.startswith("W"):
+            return max(len(y_test), 12)
+        if freq.startswith("D"):
+            return max(len(y_test), 14)
+        if freq.startswith("H"):
+            return max(len(y_test), 24)
+
+    return max(len(y_test), min(12, max(6, len(y_train) // 4)))
+
+
+def _plotly_figure_payload(fig) -> dict:
+    fig.update_layout(
+        template="plotly_white",
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        margin=dict(l=50, r=30, t=70, b=50),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    return {
+        "render_mode": "plotly",
+        "plotly_figure_json": fig.to_json(),
+        "image_format": "plotly",
+    }
+
+
 def _normalize_timeseries_index(index) -> list:
     if hasattr(index, "to_timestamp"):
         try:
@@ -1033,7 +1071,7 @@ def _normalize_timeseries_index(index) -> list:
     return [str(item) if "Period" in type(item).__name__ else item for item in index]
 
 
-def _build_timeseries_plot(context: dict, model, plot_type: str, use_train_data: bool = False) -> str:
+def _build_timeseries_plot_png(context: dict, model, plot_type: str, use_train_data: bool = False) -> str:
     pc = context["pc"]
     y_train = _to_series(pc.get_config("y_train")).dropna()
     y_test = _to_series(pc.get_config("y_test")).dropna()
@@ -1103,6 +1141,36 @@ def _build_timeseries_plot(context: dict, model, plot_type: str, use_train_data:
     else:
         raise ValueError(f"Unsupported timeseries plot type: {plot_type}")
     return _figure_to_base64()
+
+
+def _build_timeseries_plot(context: dict, model, plot_type: str, use_train_data: bool = False) -> dict:
+    pc = context["pc"]
+    y_train = _to_series(pc.get_config("y_train")).dropna()
+    y_test = _to_series(pc.get_config("y_test")).dropna()
+    data_kwargs = {"plot_data_type": "original"}
+
+    if plot_type == "forecast":
+        if use_train_data:
+            data_kwargs["fh"] = _default_timeseries_forecast_horizon(y_train, y_test)
+        else:
+            data_kwargs["fh"] = max(1, len(y_test))
+
+    try:
+        fig = pc.plot_model(
+            model,
+            plot=plot_type,
+            return_fig=True,
+            verbose=False,
+            data_kwargs=data_kwargs,
+            fig_kwargs={"big_data_threshold": 10000},
+        )
+        return _plotly_figure_payload(fig)
+    except Exception:
+        return {
+            "render_mode": "image",
+            "base64_image": _build_timeseries_plot_png(context, model, plot_type, use_train_data),
+            "image_format": "png",
+        }
 
 
 def tune_model_real(experiment_id: int, algorithm: str, tune_options: dict | None = None) -> dict:
@@ -1583,7 +1651,7 @@ def _build_clustering_plot(context: dict, model, plot_type: str) -> str:
     return _figure_to_base64()
 
 
-def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data: bool = False) -> str:
+def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data: bool = False) -> str | dict:
     context, model = _get_active_model(experiment_id, algorithm)
     pc = context["pc"]
 
