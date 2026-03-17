@@ -153,6 +153,7 @@ function matchesReportFilter(item, filter) {
   if (filter === "retirable") return item.can_cleanup_artifacts
   if (filter === "registry") return item.has_registry_version
   if (filter === "production") return item.stage === "Production"
+  if (filter === "fallback") return item.mlflow_synced === false
   return true
 }
 
@@ -217,14 +218,16 @@ export default function OperationsPanel({
   const archivedCount = experiments.filter((item) => item.status === "archived").length
   const deletableCount = experiments.filter((item) => item.can_delete).length
   const existingReports = reports.filter((item) => item.report_exists).length
+  const fallbackCount = reports.filter((item) => item.mlflow_synced === false).length
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
         <SummaryCard label="관리 대상 실험" value={experiments.length} />
         <SummaryCard label="즉시 삭제 가능" value={deletableCount} />
         <SummaryCard label="보관된 실험" value={archivedCount} />
         <SummaryCard label="생성된 보고서" value={existingReports} />
+        <SummaryCard label="MLflow fallback" value={fallbackCount} />
       </div>
 
       {message ? (
@@ -264,15 +267,13 @@ export default function OperationsPanel({
             { value: "active", label: "활성 실험" },
             { value: "archived", label: "보관 실험" },
             { value: "deletable", label: "삭제 가능" },
-            { value: "blocked", label: "제한 있음" },
+            { value: "blocked", label: "삭제 제한" },
             { value: "production", label: "프로덕션 포함" },
           ]}
           resultCount={filteredExperiments.length}
         />
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-          <ActionButton onClick={() => onArchiveExperiments?.(filteredExperiments)}>
-            필터 결과 일괄 보관
-          </ActionButton>
+          <ActionButton onClick={() => onArchiveExperiments?.(filteredExperiments)}>필터 결과 일괄 보관</ActionButton>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {!filteredExperiments.length ? <div style={{ color: "var(--text-secondary)" }}>조건에 맞는 실험이 없습니다.</div> : null}
@@ -338,7 +339,7 @@ export default function OperationsPanel({
       >
         <FilterBar
           title="보고서 / 운영 모델 관리"
-          description="저장된 보고서를 다시 열고, 재생성하거나, PDF 파일만 삭제할 수 있습니다. `은퇴 정리`는 미리보기 후 실행되며 스테이지를 `Archived`로 내리고, 예측 이력이 없으면 MLflow 버전과 최종 모델 파일까지 함께 정리합니다."
+          description="보고서를 다시 열고, 재생성하거나, PDF만 삭제할 수 있습니다. 은퇴 정리는 미리보기 후 실행되며 스테이지를 먼저 내리고 예측 이력이 없으면 모델 파일과 등록 버전까지 함께 정리합니다."
           search={reportSearch}
           onSearch={setReportSearch}
           filter={reportFilter}
@@ -347,8 +348,9 @@ export default function OperationsPanel({
             { value: "all", label: "전체 보고서" },
             { value: "existing", label: "PDF 있음" },
             { value: "missing", label: "PDF 없음" },
-            { value: "retirable", label: "완전 정리 가능" },
+            { value: "retirable", label: "은퇴 정리 가능" },
             { value: "registry", label: "레지스트리 연결" },
+            { value: "fallback", label: "MLflow fallback" },
             { value: "production", label: "프로덕션 모델" },
           ]}
           resultCount={filteredReports.length}
@@ -389,15 +391,19 @@ export default function OperationsPanel({
                 <div>보고서 {item.report_exists ? "있음" : "없음"}</div>
                 <div>레지스트리 {item.has_registry_version ? "연결됨" : "없음"}</div>
                 <div>모델 파일 {item.has_model_artifact ? "있음" : "없음"}</div>
+                <div>MLflow {item.mlflow_synced === false ? "fallback" : "synced"}</div>
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <div style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5, wordBreak: "break-all" }}>
                   {item.report_path}
                 </div>
+                {item.mlflow_synced === false ? (
+                  <Note tone="warning">MLflow 서버 동기화 없이 앱 기준 메타데이터로 유지 중입니다.</Note>
+                ) : null}
                 {item.can_cleanup_artifacts ? (
                   <Note>예측 이력이 없어 은퇴 정리 시 버전과 모델 파일까지 함께 정리할 수 있습니다.</Note>
                 ) : (
-                  <Note tone="warning">예측 이력이 있어 은퇴 정리 시 스테이지와 보고서만 정리되고 버전과 모델 파일은 유지됩니다.</Note>
+                  <Note tone="warning">예측 이력이 있어 은퇴 정리 시 스테이지와 보고서만 정리하고 버전/모델 파일은 유지됩니다.</Note>
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>

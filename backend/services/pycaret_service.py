@@ -1813,6 +1813,35 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
     return _image_payload(_read_latest_png(), native_source="plot_model", fallback_used=False)
 
 
+def get_report_safe_plot(
+    experiment_id: int,
+    algorithm: str,
+    plot_type: str,
+    family: str = "plot",
+    use_train_data: bool = False,
+) -> dict:
+    if family == "xai":
+        payload = get_interpret_plot(experiment_id, algorithm, plot_type, use_train_data)
+        return payload if isinstance(payload, dict) else _image_payload("", native_source="report_xai_empty", fallback_used=True)
+
+    context, model = _get_active_model(experiment_id, algorithm)
+    payload = get_plot(experiment_id, algorithm, plot_type, use_train_data)
+    if isinstance(payload, dict) and payload.get("render_mode") == "image":
+        return payload
+
+    if context["module_type"] == "timeseries" and plot_type in {"forecast", "residuals", "acf", "pacf"}:
+        return _image_payload(
+            _build_timeseries_plot_png(context, model, plot_type, use_train_data),
+            native_source=f"timeseries_{plot_type}_report_png",
+            fallback_used=True,
+            native_attempted=True,
+            native_reason=payload.get("native_reason") if isinstance(payload, dict) else None,
+            fallback_reason="PDF 보고서에는 image-safe PNG 경로를 사용합니다.",
+        )
+
+    return payload if isinstance(payload, dict) else _image_payload("", native_source="report_plot_empty", fallback_used=True)
+
+
 def _resolve_xai_model_and_features(context: dict, model, use_train_data: bool = False):
     pc = context["pc"]
     supervised = context["module_type"] in {"classification", "regression"}

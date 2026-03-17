@@ -1,12 +1,12 @@
 # Next Development Plan
 
-Last updated: 2026-03-13
+Last updated: 2026-03-17
 
 ## Goal
 
-The next implementation cycle is focused on tightening alignment with PyCaret-native workflows while turning reports into durable operating artifacts.
+다음 구현 사이클의 목표는 `PyCaret native-first 정렬도`를 더 높이고, `보고서와 운영 화면을 실제 운영 산출물` 수준으로 다듬는 것입니다.
 
-Core workflow target:
+핵심 워크플로우 목표:
 
 1. `setup()`
 2. `compare_models()`
@@ -24,20 +24,16 @@ Status: In Progress
 
 Current state:
 
-- analyze payloads now return `native_source` and `fallback_used`
-- plot catalog entries now label native-first vs fallback intent
-- time-series forecast / acf / pacf already prefer native plotly output
-- residuals still uses an explicit fallback path for clarity
-- diagnostic plots now live under a dedicated `Plots` route
-- explanation work now lives under a dedicated `XAI` route
-- custom SHAP paths were repaired for PyCaret pipeline models by using transformed numeric frames with the final estimator
-- `summary`, `dependence`, and `pfi` now attempt `interpret_model()` first and return custom fallback output only when PyCaret native output is not available
+- analyze payload는 `native_source`, `fallback_used`, `native_reason`, `fallback_reason`를 반환함
+- time-series forecast / acf / pacf는 native 우선 구조가 이미 있음
+- XAI `summary`, `dependence`, `pfi`는 `interpret_model()`을 먼저 시도하고 실패 시 custom fallback으로 내려감
+- experiment pickle restore가 깨질 경우 setup rebuild로 복구함
 
 Next work:
 
-- measure which estimator/module combinations can reliably stay on native `interpret_model()` output
-- reduce custom-only logic where PyCaret native output is acceptable
-- keep misleading native plots overridden only when there is a clear UX reason
+- estimator / module별로 `interpret_model()` 유지 가능 조합 표를 정리
+- native 유지 가치가 낮은 조합은 명시적으로 fallback 유지
+- custom 경로를 더 줄이되, fallback 이유는 계속 응답에 남김
 
 ### P2. Automatic Report Lifecycle
 
@@ -45,19 +41,15 @@ Status: In Progress
 
 Current state:
 
-- finalize now generates a PDF automatically
-- report service now resolves reusable report artifact paths
-- report API now supports metadata lookup and explicit regeneration
-- Production stage changes now refresh the report
-- a real saved model (`model_id=665`) successfully passed `meta -> generate -> download(PDF)` after pinning a compatible `pydyf` version for the backend image
-- Finalize now surfaces a direct link to the refreshed report after Production stage changes and rollback
-- reports now embed representative analysis artifacts when the selected plot/XAI response can be rendered as a stable image payload
-- local fallback now keeps `finalize`, registry registration, and Production stage changes working even when the configured MLflow host is unreachable
+- finalize 시 PDF 자동 생성
+- report API는 `meta`, `generate`, `download` 지원
+- Production stage 변경과 rollback 시 보고서 재생성
+- MLflow 서버가 닿지 않아도 `finalize -> register -> Production` 흐름이 앱 fallback으로 계속 진행됨
 
 Next work:
 
-- decide whether report history needs DB-backed metadata
-- optionally add scheduled Production report refresh
+- report history를 별도 메타데이터로 관리할지 결정
+- 필요하면 scheduled Production report refresh 추가
 
 ### P3. Report Content Enrichment
 
@@ -65,16 +57,16 @@ Status: In Progress
 
 Current state:
 
-- reports now include experiment, module, dataset, target, run id, metrics, hyperparameters, and setup summary
-- reports now also include KPI overview cards, workflow steps, dataset profile, compare/tune summary, and artifact inventory
-- reports now also include module-appropriate representative charts, currently verified on a saved regression model with `잔차 플롯` and `SHAP 요약`
-- a newly finalized regression model also passed `finalize -> register -> Production` with automatic report generation and Production report refresh in-session
+- 보고서는 KPI, workflow, dataset profile, compare/tune summary, artifact inventory를 포함
+- 회귀 보고서는 대표 차트로 `잔차 플롯`, `SHAP 요약`을 포함
+- 시계열 보고서는 대표 차트로 `예측 추세`, `잔차 플롯`을 포함
+- clustering / anomaly는 현재 안정적인 fallback 차트 1종씩 포함
 
 Next work:
 
-- expand report-safe chart coverage to more module types without making PDF generation brittle
-- add compare/tune summary blocks if they are worth preserving in the final report
-- improve styling and readability for longer hyperparameter tables
+- clustering / anomaly에서 추가로 넣을 수 있는 image-safe 차트 검토
+- compare/tune summary의 가독성 보강
+- 하이퍼파라미터 테이블이 긴 경우 레이아웃 보정
 
 ### P4. UI Copy / Localization Cleanup
 
@@ -82,22 +74,14 @@ Status: In Progress
 
 Current state:
 
-- the app shell, sidebar, header, and the new `Plots` / `XAI` screens are now back in Korean
-- Tune, Finalize, MLflow, and several dashboard/detail panels were also re-localized to Korean
-- compare leaderboard, MLflow registry/schedule panels, and the PDF report template were also normalized to Korean
-- Finalize stage management, registry registration, MLflow logs, and report labels were re-normalized after additional mojibake cleanup
-- Home, Compare, Setup module selection, and Predict high-traffic surfaces were also re-normalized to Korean
-- setup forms and upload/data-quality surfaces were also re-normalized to Korean
-- plots/XAI workspace guidance and SHAP-side helper labels were also re-normalized to Korean
-- XAI responses now expose why native `interpret_model()` succeeded or why fallback was used, and saved experiment restore now rebuilds setup when pickle compatibility fails
-- Finalize now also surfaces whether MLflow sync succeeded or whether the app used local fallback metadata
-- mixed-language and mojibake strings may still exist in lower-traffic or not-yet-revisited components
+- 주요 고빈도 화면은 대부분 한국어로 정리됨
+- Finalize는 `mlflow_synced` fallback 상태까지 표시
+- operations panel도 한국어 기준으로 정리되고 `MLflow fallback` 필터가 추가됨
 
 Next work:
 
-- scan remaining pages/components for leftover English labels or mojibake
-- keep Korean as the default product UI language unless there is an explicit requirement to support dual-language UI
-- remove mojibake before deeper UX polish
+- 저빈도 화면의 영어 / mojibake 문구 최종 스캔
+- 필요 시 PDF 템플릿의 남은 문구도 다시 정리
 
 ### P5. Production Ops Refinement
 
@@ -105,38 +89,33 @@ Status: In Progress
 
 Current state:
 
-- MLflow registry flows and report refresh hooks are now connected
-- `MLflow > 운영 관리` now exposes experiment archive/delete safety checks and report lifecycle controls
-- registered/finalized models can now enter a retirement workflow before an experiment becomes deletable
-- operations lists now support client-side search and lifecycle filtering for large histories
-- retirement now includes a dry-run preview that shows planned cleanup actions and whether the linked experiment could become deletable afterward
-- bulk archive and missing-report bulk generation are now available from the filtered operations lists
-- Production report refresh results are now surfaced again from the Finalize screen with a direct reopen link
+- `MLflow > 운영 관리`에서 실험 보관, 삭제 판정, 보고서 재생성/삭제, 은퇴 preview/workflow 지원
+- operations payload에 `mlflow_synced` 상태가 포함됨
+- Production report refresh 결과는 Finalize에서 바로 확인 가능
 
 Next work:
 
-- surface report refresh results in Production management UI if needed
-- tighten the link between Production version, MLflow version, and generated report
-- consider server-side pagination if experiment and report lists grow significantly
-- consider bulk retirement or staged cleanup queues once operator confidence is high enough
+- `mlflow_synced` 상태를 registry / MLflow 다른 탭까지 확장할지 결정
+- 운영 데이터가 많아질 경우 server-side pagination 검토
+- 필요하면 bulk retirement queue 형태 검토
 
 ## Recommended execution order
 
 1. XAI path review against `interpret_model()` by estimator/module
-2. Expand report-safe chart coverage and then persist analyze artifacts for report reuse
-3. Decide how `mlflow_synced` fallback state should surface in UI and docs
+2. Expand report-safe chart coverage for clustering/anomaly
+3. Decide how far `mlflow_synced` fallback state should surface in UI and docs
 4. Continue copy cleanup and UX polish
-5. Add more module-specific runtime validation, especially time-series and clustering
+5. Add more module-specific runtime validation
 
 ## Immediate next implementation
 
-1. Add report-safe representative charts for time-series.
-2. Add report-safe representative charts for clustering or anomaly, but only where image output is stable.
-3. Revisit XAI native-first support table by estimator and record which combinations should stay fallback.
-4. If fallback state is useful operationally, expose `mlflow_synced` in `MLflow > 운영 관리`.
+1. clustering / anomaly에서 image-safe 대표 차트를 더 넣을 수 있는지 검토
+2. estimator별 XAI native-first 유지표를 만들고 fallback 유지 대상을 명확히 정리
+3. `mlflow_synced`를 registry / MLflow 다른 화면에도 보여줄지 결정
+4. 남은 mixed-language / mojibake 화면 정리
 
 ## Notes
 
-- No hard blocker is currently identified in code.
-- The largest remaining architectural gap is still the custom XAI layer for cases where PyCaret native interpretability is unavailable.
-- Report generation is connected, now includes representative chart artifacts, and new-model runtime validation is complete for a regression flow in this environment.
+- 현재 큰 기능 블로커는 없음
+- 가장 큰 구조적 숙제는 여전히 XAI custom 계층 축소
+- 보고서 생성은 회귀, 시계열, clustering, anomaly-safe 경로까지 검증됨

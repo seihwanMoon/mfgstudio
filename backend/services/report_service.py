@@ -8,7 +8,7 @@ from config import settings
 from models.dataset import Dataset
 from models.experiment import Experiment
 from models.trained_model import TrainedModel
-from services.pycaret_service import EXPERIMENT_CONTEXTS, ensure_experiment_context, get_interpret_plot, get_plot
+from services.pycaret_service import EXPERIMENT_CONTEXTS, ensure_experiment_context, get_report_safe_plot
 
 
 TEMPLATE_ENV = Environment(
@@ -19,7 +19,7 @@ TEMPLATE_ENV = Environment(
 MODULE_LABELS = {
     "classification": "분류",
     "regression": "회귀",
-    "clustering": "군집",
+    "clustering": "클러스터링",
     "anomaly": "이상탐지",
     "timeseries": "시계열",
 }
@@ -42,22 +42,62 @@ METRIC_PRIORITY = {
 
 REPORT_CHART_SPECS = {
     "classification": [
-        {"family": "plot", "key": "feature", "title": "변수 중요도", "caption": "모델 진단 기준의 대표 변수 중요도입니다."},
-        {"family": "xai", "key": "summary", "title": "SHAP 요약", "caption": "예측에 큰 영향을 준 상위 feature를 요약합니다."},
+        {
+            "family": "plot",
+            "key": "feature",
+            "title": "변수 중요도",
+            "caption": "모델 진단 기준의 대표 변수 중요도입니다.",
+        },
+        {
+            "family": "xai",
+            "key": "summary",
+            "title": "SHAP 요약",
+            "caption": "예측에 큰 영향을 준 상위 feature를 요약합니다.",
+        },
     ],
     "regression": [
-        {"family": "plot", "key": "residuals", "title": "잔차 플롯", "caption": "예측 오차 패턴이 안정적인지 확인합니다."},
-        {"family": "xai", "key": "summary", "title": "SHAP 요약", "caption": "예측값 변화에 기여한 상위 feature를 요약합니다."},
+        {
+            "family": "plot",
+            "key": "residuals",
+            "title": "잔차 플롯",
+            "caption": "예측 오차 패턴이 안정적인지 확인합니다.",
+        },
+        {
+            "family": "xai",
+            "key": "summary",
+            "title": "SHAP 요약",
+            "caption": "예측값 변화에 기여한 상위 feature를 요약합니다.",
+        },
     ],
     "clustering": [
-        {"family": "plot", "key": "cluster", "title": "클러스터 분포", "caption": "클러스터 분리 상태를 2D 투영으로 보여줍니다."},
+        {
+            "family": "plot",
+            "key": "cluster",
+            "title": "클러스터 분포",
+            "caption": "클러스터 분리 상태를 2D 투영으로 보여줍니다.",
+        },
     ],
     "anomaly": [
-        {"family": "plot", "key": "tsne", "title": "이상치 임베딩", "caption": "정상/이상 패턴의 분포를 임베딩으로 확인합니다."},
+        {
+            "family": "plot",
+            "key": "tsne",
+            "title": "이상치 임베딩",
+            "caption": "정상/이상 패턴의 분포를 임베딩으로 확인합니다.",
+        },
     ],
     "timeseries": [
-        {"family": "plot", "key": "acf", "title": "ACF", "caption": "시계열 자기상관 구조를 요약합니다."},
-        {"family": "plot", "key": "pacf", "title": "PACF", "caption": "부분 자기상관 구조를 요약합니다."},
+        {
+            "family": "plot",
+            "key": "forecast",
+            "title": "예측 추세",
+            "caption": "학습 구간과 예측 구간을 함께 보여주는 대표 시계열 차트입니다.",
+        },
+        {
+            "family": "plot",
+            "key": "residuals",
+            "title": "잔차 플롯",
+            "caption": "예측 오차를 시간 순서대로 확인하는 대표 진단 차트입니다.",
+        },
     ],
 }
 
@@ -111,7 +151,6 @@ def _stage_label(value: str | None) -> str:
 
 
 def _summarize_setup_params(params: dict) -> list[dict]:
-    summary = []
     key_map = {
         "session_id": "세션 ID",
         "train_size": "학습 비율",
@@ -128,6 +167,7 @@ def _summarize_setup_params(params: dict) -> list[dict]:
         "log_experiment": "MLflow 기록",
         "log_plots": "플롯 기록",
     }
+    summary = []
     for key in (
         "target_col",
         "session_id",
@@ -250,7 +290,7 @@ def _build_compare_summary(context_meta: dict) -> list[dict]:
     run_ids = context_meta.get("run_ids", {})
     return [
         {"label": "비교 기준", "value": _format_value(compare_options.get("sort"))},
-        {"label": "후보 수", "value": _format_value(compare_options.get("n_select"))},
+        {"label": "선정 수", "value": _format_value(compare_options.get("n_select"))},
         {"label": "모델 범위", "value": _format_value(compare_options.get("catalog_scope"))},
         {"label": "모델 계열", "value": _format_value(compare_options.get("family"))},
         {"label": "비교 실행 모델 수", "value": _format_value(len(run_ids))},
@@ -306,19 +346,17 @@ def _build_summary_lines(model: TrainedModel, experiment: Experiment | None, dat
     lines = [
         f"{_module_label(experiment.module_type if experiment else None)} 실험 `{experiment.name if experiment else '-'}`에서 `{experiment.target_col if experiment else '-'}` 타깃을 위해 생성된 모델입니다.",
         f"데이터셋은 `{dataset.filename if dataset else '-'}`이며 총 {_format_value(dataset.row_count if dataset else None)}행 / {_format_value(dataset.col_count if dataset else None)}열을 기준으로 학습했습니다.",
-        f"비교 기준은 `{_format_value(compare_options.get('sort'))}`이며 실제 비교 실행 모델 수는 `{candidate_count}`건입니다.",
+        f"비교 기준은 `{_format_value(compare_options.get('sort'))}`이고 실제 비교 실행 모델 수는 `{candidate_count}`개입니다.",
     ]
     if model.is_tuned:
-        lines.append("튜닝 이력이 있어 tuned estimator 기준 성능과 하이퍼파라미터 변동 사항을 함께 기록합니다.")
+        lines.append("튜닝 이력이 있어 tuned estimator 기준 성능과 하이퍼파라미터 변경 사항을 함께 기록합니다.")
     if model.stage == "Production":
-        lines.append("현재 이 모델은 프로덕션 스테이지에 배치되어 운영 지표와 보고서 재생성 대상에 포함됩니다.")
+        lines.append("현재 이 모델은 프로덕션 스테이지에 배치되어 있어 운영 지표와 보고서 재생성 대상에 포함됩니다.")
     return lines
 
 
 def _report_family_label(family: str) -> str:
-    if family == "xai":
-        return "XAI"
-    return "진단 그래프"
+    return "XAI" if family == "xai" else "진단 그래프"
 
 
 def _build_report_chart_item(spec: dict, payload: dict) -> dict | None:
@@ -342,11 +380,7 @@ def _build_report_chart_item(spec: dict, payload: dict) -> dict | None:
     }
 
 
-def _build_report_charts(
-    model: TrainedModel,
-    experiment: Experiment | None,
-    dataset: Dataset | None,
-) -> list[dict]:
+def _build_report_charts(model: TrainedModel, experiment: Experiment | None, dataset: Dataset | None) -> list[dict]:
     if not experiment or not dataset or not dataset.stored_path:
         return []
 
@@ -372,10 +406,12 @@ def _build_report_charts(
     charts: list[dict] = []
     for spec in chart_specs:
         try:
-            if spec["family"] == "xai":
-                payload = get_interpret_plot(experiment.id, model.algorithm, spec["key"])
-            else:
-                payload = get_plot(experiment.id, model.algorithm, spec["key"])
+            payload = get_report_safe_plot(
+                experiment.id,
+                model.algorithm,
+                spec["key"],
+                family=spec["family"],
+            )
             chart_item = _build_report_chart_item(spec, payload)
             if chart_item:
                 charts.append(chart_item)
@@ -456,11 +492,7 @@ def render_report_pdf(context: dict) -> bytes:
     return HTML(string=html, base_url=str(Path(settings.report_dir).resolve())).write_pdf()
 
 
-def generate_model_report(
-    db: Session,
-    model: TrainedModel,
-    force: bool = False,
-) -> dict:
+def generate_model_report(db: Session, model: TrainedModel, force: bool = False) -> dict:
     experiment = db.query(Experiment).filter(Experiment.id == model.experiment_id).first()
     dataset = db.query(Dataset).filter(Dataset.id == experiment.dataset_id).first() if experiment else None
     report_path = resolve_report_path(model)

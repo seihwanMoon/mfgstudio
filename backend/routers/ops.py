@@ -315,6 +315,7 @@ def list_managed_reports(db: Session = Depends(get_db)):
                 "can_cleanup_artifacts": prediction_counts.get(model.id, 0) == 0,
                 "has_registry_version": model.mlflow_version is not None,
                 "has_model_artifact": bool(model.model_path),
+                "mlflow_synced": not str(model.mlflow_run_id or "").startswith("local-"),
                 "report_path": str(report_path),
                 "report_exists": report_exists,
                 "report_updated_at": datetime.fromtimestamp(report_path.stat().st_mtime).isoformat() if report_exists else None,

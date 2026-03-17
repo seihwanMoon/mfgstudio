@@ -19,6 +19,8 @@ All planned tasks are currently complete.
 
 ## Recent Updates
 
+- 2026-03-17: expanded report-safe chart coverage so time-series reports now embed `예측 추세` and `잔차 플롯`, while clustering/anomaly report flows remain verified on their stable fallback charts.
+- 2026-03-17: added `mlflow_synced` visibility to operations payloads and refreshed the operations panel so `MLflow fallback` models can be filtered and inspected from the management UI.
 - 2026-03-13: documented the latest handoff baseline after commits `8b5fd2f` and `3b145bc`, so the next cycle can resume from report-chart expansion, XAI native-first cleanup, and remaining localization work without rediscovery.
 - 2026-03-13: exposed `mlflow_synced` fallback status and clearer Korean copy on the Finalize / registry-stage flow so local-only execution can explain when app metadata fallback was used.
 - 2026-03-13: hardened MLflow integration so `finalize`, registry registration, and Production stage changes degrade to local fallback metadata instead of failing when the configured tracking host is unreachable.

@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-03-13
+Last updated: 2026-03-17
 
 ## Summary
 
@@ -10,6 +10,7 @@ Last updated: 2026-03-13
 
 - `8b5fd2f` `feat: enrich reports and harden mlflow fallbacks`
 - `3b145bc` `feat: surface mlflow fallback status in finalize`
+- current working tree adds report-safe time-series charts and MLflow fallback visibility in operations
 
 핵심 완료 항목:
 
@@ -22,6 +23,8 @@ Last updated: 2026-03-13
 - PDF 보고서에 대표 분석 산출물 삽입 시작
 - MLflow 서버가 닿지 않아도 `finalize -> register -> Production` 흐름이 앱 기준 fallback으로 계속 진행되도록 보강
 - Finalize 화면에서 `mlflow_synced` fallback 상태와 보고서 링크를 명시적으로 노출
+- time-series 보고서에 `예측 추세`와 `잔차 플롯`이 대표 차트로 포함되도록 확장
+- 운영 관리 보고서 목록에서 `mlflow_synced` 기반 fallback 상태를 확인하고 필터링할 수 있도록 보강
 
 ## Current working tree
 
@@ -60,6 +63,9 @@ Last updated: 2026-03-13
 - `POST /api/train/finalize/679` -> `200`
 - `POST /api/registry/register` -> `200`
 - `PUT /api/registry/{model_name}/stage` -> `200`
+- `build_report_context(model_id=544)` 에서 time-series report charts 2개 확인
+- `build_report_context(model_id=379)` / `build_report_context(model_id=319)` 에서 clustering/anomaly report chart 유지 확인
+- `GET /api/ops/reports` -> `200` and `mlflow_synced` field present
 
 실검증 결과:
 
@@ -77,7 +83,7 @@ Last updated: 2026-03-13
 ## Current focus
 
 1. XAI custom 경로를 더 줄이고 `interpret_model()` 가능 범위를 넓히기
-2. 보고서용 안전 차트를 time-series / clustering까지 확장하기
+2. 보고서용 안전 차트를 clustering/anomaly에서 더 확장할지 검토하기
 3. `mlflow_synced` / fallback 상태를 운영 화면까지 노출할지 결정하기
 4. 남은 혼합 언어 / mojibake UI 문구를 정리하기
 5. 필요하면 보고서 히스토리 메타데이터를 별도 관리할지 결정하기
@@ -86,8 +92,8 @@ Last updated: 2026-03-13
 
 1. [NEXT_DEVELOPMENT_PLAN.md](D:/GITHUB/mfgstudio/NEXT_DEVELOPMENT_PLAN.md)의 `P1`과 `P3`부터 이어서 진행
 2. [backend/services/pycaret_service.py](D:/GITHUB/mfgstudio/backend/services/pycaret_service.py)에서 module/estimator별 native XAI 가능 범위 정리
-3. [backend/services/report_service.py](D:/GITHUB/mfgstudio/backend/services/report_service.py)에 time-series / clustering 대표 차트 추가
-4. [frontend/src/pages/MLflowPage.jsx](D:/GITHUB/mfgstudio/frontend/src/pages/MLflowPage.jsx) 또는 운영 관리 컴포넌트에 `mlflow_synced` fallback 상태 노출 여부 검토
+3. [backend/services/report_service.py](D:/GITHUB/mfgstudio/backend/services/report_service.py)에서 clustering/anomaly 대표 차트 추가 여지를 검토
+4. [frontend/src/components/mlflow/OperationsPanel.jsx](D:/GITHUB/mfgstudio/frontend/src/components/mlflow/OperationsPanel.jsx) 기준으로 fallback 상태 표현을 더 다듬을지 검토
 5. 브라우저에서 `/finalize`, `/plots`, `/xai`, `/mlflow` 재확인
 
 ## Resume checklist
