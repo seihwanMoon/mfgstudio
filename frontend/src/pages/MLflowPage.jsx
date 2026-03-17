@@ -21,9 +21,9 @@ function buildRetirePreviewMessage(item, preview) {
     : "예정된 정리 작업이 없습니다."
   const skipped = preview.skipped?.length ? `\n\n제외 항목:\n- ${preview.skipped.join("\n- ")}` : ""
   const deleteState = preview.experiment_deletable_after
-    ? "\n\n이 정리 후 해당 실험은 삭제 가능 상태가 됩니다."
+    ? "\n\n정리 후에는 연결된 실험도 삭제 가능한 상태가 됩니다."
     : preview.experiment_delete_blockers_after?.length
-      ? `\n\n이 정리 후에도 실험 삭제 제한이 남습니다:\n- ${preview.experiment_delete_blockers_after.join("\n- ")}`
+      ? `\n\n정리 후에도 실험 삭제 제한이 남습니다:\n- ${preview.experiment_delete_blockers_after.join("\n- ")}`
       : ""
 
   return (
@@ -44,6 +44,7 @@ export default function MLflowPage() {
   const [jobs, setJobs] = useState([])
   const [managedExperiments, setManagedExperiments] = useState([])
   const [managedReports, setManagedReports] = useState([])
+  const [cacheStatus, setCacheStatus] = useState(null)
   const [tab, setTab] = useState("logs")
   const [loadingExperiments, setLoadingExperiments] = useState(true)
   const [loadingRuns, setLoadingRuns] = useState(false)
@@ -101,12 +102,14 @@ export default function MLflowPage() {
   }
 
   async function refreshOperations() {
-    const [experimentResponse, reportResponse] = await Promise.all([
+    const [experimentResponse, reportResponse, cacheResponse] = await Promise.all([
       opsAPI.experiments().catch(() => ({ experiments: [] })),
       opsAPI.reports().catch(() => ({ reports: [] })),
+      opsAPI.cacheStatus().catch(() => null),
     ])
     setManagedExperiments(experimentResponse.experiments || [])
     setManagedReports(reportResponse.reports || [])
+    setCacheStatus(cacheResponse)
   }
 
   async function handleToggle(job) {
@@ -159,10 +162,10 @@ export default function MLflowPage() {
   async function handleRegenerateReports(items) {
     const targets = items.filter((item) => !item.report_exists)
     if (!targets.length) {
-      setOpsMessage("재생성할 누락 보고서가 없습니다.")
+      setOpsMessage("생성할 누락 보고서가 없습니다.")
       return
     }
-    const confirmed = window.confirm(`누락된 ${targets.length}개 보고서를 일괄 생성하시겠습니까?`)
+    const confirmed = window.confirm(`누락된 ${targets.length}개 보고서를 한 번에 생성하시겠습니까?`)
     if (!confirmed) return
     await Promise.all(targets.map((item) => reportAPI.generate(item.model_id, true)))
     setOpsMessage(`누락된 ${targets.length}개 보고서를 생성했습니다.`)
@@ -186,13 +189,23 @@ export default function MLflowPage() {
     const actions = response.actions?.length ? response.actions.join(", ") : "실행된 정리 작업 없음"
     const skipped = response.skipped?.length ? ` / 제외: ${response.skipped.join(", ")}` : ""
     const deleteState = response.experiment_deletable_after
-      ? " / 연결 실험은 이제 삭제 가능합니다."
+      ? " / 연결 실험도 이제 삭제 가능합니다."
       : response.experiment_delete_blockers_after?.length
         ? ` / 남은 실험 삭제 제한: ${response.experiment_delete_blockers_after.join(", ")}`
         : ""
 
     setOpsMessage(`모델 '${item.model_name}' 은퇴 정리 완료: ${actions}${skipped}${deleteState}`)
     await Promise.all([refreshOperations(), refreshRegistry(), refreshMlflowExperiments()])
+  }
+
+  async function handleCleanupCache() {
+    const confirmed = window.confirm("현재 보존 정책 기준으로 아티팩트 캐시를 정리하시겠습니까?")
+    if (!confirmed) return
+    const response = await opsAPI.cleanupCache()
+    const reportPairs = response?.cleanup?.report_chart_cache?.removed_pairs || 0
+    const xaiPairs = response?.cleanup?.xai_snapshot_cache?.removed_pairs || 0
+    setOpsMessage(`캐시 정리 완료: report ${reportPairs}쌍, XAI ${xaiPairs}쌍 정리`)
+    setCacheStatus(response)
   }
 
   return (
@@ -208,6 +221,7 @@ export default function MLflowPage() {
                 : status?.status || "상태 없음"}
           </div>
           <div style={{ color: "#8BA8C8", fontSize: 12, marginTop: 8 }}>{status?.uri || "-"}</div>
+          {status?.error ? <div style={{ color: "#FCA5A5", fontSize: 12, marginTop: 8 }}>{status.error}</div> : null}
         </div>
         <ModelRegistryList rows={models} />
       </div>
@@ -242,7 +256,7 @@ export default function MLflowPage() {
             />
             {loadingExperiments || loadingRuns ? (
               <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
-                {loadingExperiments ? "MLflow 실험 목록을 불러오는 중..." : "선택한 실험의 run 목록을 불러오는 중..."}
+                {loadingExperiments ? "MLflow 실험 목록을 불러오는 중입니다..." : "선택한 실험의 run 목록을 불러오는 중입니다..."}
               </div>
             ) : null}
           </>
@@ -255,6 +269,7 @@ export default function MLflowPage() {
           <OperationsPanel
             experiments={managedExperiments}
             reports={managedReports}
+            cacheStatus={cacheStatus}
             message={opsMessage}
             onArchiveExperiment={handleArchiveExperiment}
             onArchiveExperiments={handleArchiveExperiments}
@@ -263,6 +278,8 @@ export default function MLflowPage() {
             onRegenerateReport={handleRegenerateReport}
             onRegenerateReports={handleRegenerateReports}
             onDeleteReport={handleDeleteReport}
+            onRefreshCacheStatus={refreshOperations}
+            onCleanupCache={handleCleanupCache}
           />
         ) : null}
       </div>

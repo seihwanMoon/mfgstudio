@@ -1,5 +1,6 @@
 ﻿import base64
 import importlib.util
+from datetime import datetime
 from io import BytesIO
 import json
 import math
@@ -21,6 +22,13 @@ from sklearn.metrics import accuracy_score
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 from config import settings
+from services.artifact_cache import (
+    build_cache_signature,
+    cleanup_cache_directory,
+    load_cached_artifact,
+    retention_seconds,
+    store_cached_artifact,
+)
 from services.mlflow_service import (
     ensure_experiment,
     log_sklearn_model_run,
@@ -111,6 +119,54 @@ def _context_metadata_path(experiment_id: int) -> Path:
     return _experiment_dir(experiment_id) / "context.json"
 
 
+def _xai_cache_dir_path(experiment_id: int, algorithm: str) -> Path:
+    return Path(settings.report_dir) / "xai_cache" / f"experiment_{experiment_id}" / _slugify_algorithm(algorithm)
+
+
+def _xai_cache_dir(experiment_id: int, algorithm: str) -> Path:
+    path = _xai_cache_dir_path(experiment_id, algorithm)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _xai_snapshot_cache_paths(
+    experiment_id: int,
+    algorithm: str,
+    plot_type: str,
+    use_train_data: bool,
+    row_index: int | None = None,
+) -> tuple[Path, Path]:
+    suffix = f"{plot_type}_{'train' if use_train_data else 'test'}_row_{max(0, int(row_index or 0))}"
+    cache_dir = _xai_cache_dir(experiment_id, algorithm)
+    return cache_dir / f"{suffix}.png", cache_dir / f"{suffix}.json"
+
+
+def _xai_snapshot_cache_signature(
+    experiment_id: int,
+    algorithm: str,
+    plot_type: str,
+    use_train_data: bool,
+    row_index: int | None = None,
+) -> str:
+    return build_cache_signature(
+        artifact_kind="xai_snapshot",
+        experiment_id=experiment_id,
+        algorithm=_slugify_algorithm(algorithm),
+        plot_type=plot_type,
+        use_train_data=bool(use_train_data),
+        row_index=max(0, int(row_index or 0)),
+        experiment_pickle_mtime=_experiment_pickle_path(experiment_id).stat().st_mtime if _experiment_pickle_path(experiment_id).exists() else None,
+        context_mtime=_context_metadata_path(experiment_id).stat().st_mtime if _context_metadata_path(experiment_id).exists() else None,
+    )
+
+
+def _cleanup_xai_snapshot_cache(experiment_id: int, algorithm: str) -> None:
+    cleanup_cache_directory(
+        _xai_cache_dir(experiment_id, algorithm),
+        max_age_seconds=retention_seconds(settings.xai_snapshot_cache_retention_days),
+    )
+
+
 def _cached_model_path(experiment_id: int, bucket: str, algorithm: str) -> Path:
     bucket_dir = _experiment_dir(experiment_id) / bucket
     bucket_dir.mkdir(parents=True, exist_ok=True)
@@ -162,6 +218,226 @@ def _persist_context_metadata(context: dict) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _load_xai_snapshot_cache(
+    experiment_id: int,
+    algorithm: str,
+    plot_type: str,
+    use_train_data: bool,
+    row_index: int | None = None,
+) -> dict | None:
+    image_path, metadata_path = _xai_snapshot_cache_paths(experiment_id, algorithm, plot_type, use_train_data, row_index)
+    image_base64, metadata = load_cached_artifact(
+        image_path,
+        metadata_path,
+        _xai_snapshot_cache_signature(experiment_id, algorithm, plot_type, use_train_data, row_index),
+        purge_invalid=True,
+    )
+    if not image_base64 or not metadata:
+        return None
+
+    metadata["base64_image"] = image_base64
+    metadata["cache_hit"] = True
+    metadata["cache_path"] = str(image_path)
+    existing_reason = metadata.get("native_reason")
+    metadata["native_reason"] = (
+        f"{existing_reason} / snapshot cache 재사용"
+        if existing_reason
+        else "snapshot cache 재사용"
+    )
+    return metadata
+
+
+def _store_xai_snapshot_cache(
+    experiment_id: int,
+    algorithm: str,
+    plot_type: str,
+    use_train_data: bool,
+    row_index: int | None,
+    payload: dict,
+) -> None:
+    if not isinstance(payload, dict):
+        return
+    if payload.get("render_mode") != "image":
+        return
+    image_base64 = payload.get("base64_image")
+    if not image_base64:
+        return
+
+    image_path, metadata_path = _xai_snapshot_cache_paths(experiment_id, algorithm, plot_type, use_train_data, row_index)
+    metadata = {key: value for key, value in payload.items() if key != "base64_image"}
+    metadata["cache_hit"] = False
+    metadata["cache_path"] = str(image_path)
+    metadata["signature"] = _xai_snapshot_cache_signature(experiment_id, algorithm, plot_type, use_train_data, row_index)
+    store_cached_artifact(image_path, metadata_path, image_base64, metadata)
+
+
+def _attach_xai_cache_metadata(
+    payload: dict,
+    experiment_id: int,
+    algorithm: str,
+    plot_type: str,
+    use_train_data: bool,
+    row_index: int | None,
+    *,
+    cache_hit: bool,
+) -> dict:
+    image_path, _ = _xai_snapshot_cache_paths(experiment_id, algorithm, plot_type, use_train_data, row_index)
+    payload["cache_hit"] = cache_hit
+    payload["cache_path"] = str(image_path)
+    return payload
+
+
+def _xai_observation_status(native_count: int, fallback_count: int) -> str:
+    if native_count > 0 and fallback_count == 0:
+        return "native_only"
+    if fallback_count > 0 and native_count == 0:
+        return "fallback_only"
+    if native_count > 0 and fallback_count > 0:
+        return "mixed"
+    return "none"
+
+
+def _observed_support_level(observed_status: str, base_support_level: str | None) -> str | None:
+    if observed_status == "native_only":
+        return "preferred"
+    if observed_status == "mixed":
+        return "conditional"
+    if observed_status == "fallback_only":
+        return "fallback_only"
+    return base_support_level
+
+
+def _build_xai_observation_note(plot_type: str, observation: dict) -> str:
+    sample_count = int(observation.get("sample_count") or 0)
+    native_count = int(observation.get("native_count") or 0)
+    fallback_count = int(observation.get("fallback_count") or 0)
+    observed_status = observation.get("status") or "none"
+
+    if sample_count <= 0 or observed_status == "none":
+        return "아직 이 실험에서 누적된 관찰 이력이 없습니다."
+    if observed_status == "native_only":
+        return f"이 실험에서 {plot_type} 요청 {sample_count}건이 모두 native 경로로 관찰되었습니다."
+    if observed_status == "fallback_only":
+        return f"이 실험에서 {plot_type} 요청 {sample_count}건이 모두 fallback 경로로 관찰되었습니다."
+    return (
+        f"이 실험에서 {plot_type} 요청 {sample_count}건 중 native {native_count}건, "
+        f"fallback {fallback_count}건이 함께 관찰되었습니다."
+    )
+
+
+def _merge_xai_policy_observation(policy: dict, observation: dict | None = None) -> dict:
+    observation = observation or {}
+    observed_status = observation.get("status", "none")
+    observed_support_level = _observed_support_level(observed_status, policy.get("support_level"))
+    observed_note = _build_xai_observation_note(policy.get("plot_type", "xai"), observation)
+    effective_note = (
+        f"{policy.get('notes')} / 관찰: {observed_note}"
+        if policy.get("notes")
+        else observed_note
+    )
+    merged = dict(policy)
+    merged.update(
+        {
+            "observed_status": observed_status,
+            "observed_note": observed_note,
+            "observed_sample_count": int(observation.get("sample_count") or 0),
+            "effective_support_level": observed_support_level,
+            "effective_policy_note": effective_note,
+        }
+    )
+    return merged
+
+
+def _current_xai_policy(module_type: str, experiment_id: int, algorithm: str, plot_type: str) -> dict:
+    return _merge_xai_policy_observation(
+        _get_xai_native_policy(module_type, plot_type, algorithm),
+        summarize_xai_cache_observations(experiment_id, algorithm).get(plot_type, {}),
+    )
+
+
+def summarize_xai_cache_observations(experiment_id: int, algorithm: str) -> dict[str, dict]:
+    cache_dir = _xai_cache_dir_path(experiment_id, algorithm)
+    summary = {
+        plot_type: {
+            "plot_type": plot_type,
+            "sample_count": 0,
+            "native_count": 0,
+            "fallback_count": 0,
+            "cache_file_count": 0,
+            "status": "none",
+            "last_observed_at": None,
+        }
+        for plot_type in ("summary", "dependence", "pfi")
+    }
+    if not cache_dir.exists():
+        return summary
+
+    for metadata_path in cache_dir.glob("*.json"):
+        stem = metadata_path.stem
+        plot_type = stem.split("_", 1)[0]
+        if plot_type not in summary:
+            continue
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        row = summary[plot_type]
+        row["cache_file_count"] += 1
+        row["sample_count"] += 1
+        if metadata.get("fallback_used"):
+            row["fallback_count"] += 1
+        else:
+            row["native_count"] += 1
+        try:
+            observed_at = datetime.fromtimestamp(metadata_path.stat().st_mtime).isoformat()
+        except Exception:
+            observed_at = None
+        if observed_at and (row["last_observed_at"] is None or observed_at > row["last_observed_at"]):
+            row["last_observed_at"] = observed_at
+
+    for plot_type, row in summary.items():
+        row["status"] = _xai_observation_status(row["native_count"], row["fallback_count"])
+
+    return summary
+
+
+def get_xai_policy_matrix_row(module_type: str, experiment_id: int, algorithm: str) -> dict:
+    policies = {}
+    observations = summarize_xai_cache_observations(experiment_id, algorithm)
+    for plot_type in ("summary", "dependence", "pfi"):
+        observation = observations.get(plot_type, {})
+        policy = _merge_xai_policy_observation(
+            _get_xai_native_policy(module_type, plot_type, algorithm),
+            observation,
+        )
+        policies[plot_type] = {
+            "plot_type": plot_type,
+            "source_preference": policy.get("source_preference"),
+            "support_level": policy.get("support_level"),
+            "notes": policy.get("notes"),
+            "effective_support_level": policy.get("effective_support_level"),
+            "effective_policy_note": policy.get("effective_policy_note"),
+            "observed_note": policy.get("observed_note"),
+            "native_supported": policy.get("native_supported"),
+            "fallback_supported": policy.get("fallback_supported"),
+            "estimator_family": policy.get("estimator_family"),
+            "estimator_family_label": policy.get("estimator_family_label"),
+            "sample_count": observation.get("sample_count", 0),
+            "native_count": observation.get("native_count", 0),
+            "fallback_count": observation.get("fallback_count", 0),
+            "cache_file_count": observation.get("cache_file_count", 0),
+            "observed_status": observation.get("status", "none"),
+            "last_observed_at": observation.get("last_observed_at"),
+        }
+    return {
+        "algorithm": algorithm,
+        "estimator_family": policies["summary"]["estimator_family"],
+        "estimator_family_label": policies["summary"]["estimator_family_label"],
+        "plots": policies,
+    }
 
 
 def _save_experiment_snapshot(context: dict) -> None:
@@ -1716,6 +1992,26 @@ def _build_anomaly_embedding_plot(context: dict, model, plot_type: str) -> str:
     return _figure_to_base64()
 
 
+def _build_anomaly_score_plot(context: dict, model) -> str:
+    pc = context["pc"]
+    assigned = pc.assign_model(model)
+    if "Anomaly_Score" not in assigned.columns:
+        raise ValueError("Anomaly score data is unavailable for visualization.")
+
+    scores = pd.to_numeric(assigned["Anomaly_Score"], errors="coerce").dropna()
+    if scores.empty:
+        raise ValueError("Anomaly score data is empty after numeric conversion.")
+
+    plt.figure(figsize=(9, 5.5))
+    plt.hist(scores, bins=min(24, max(8, int(np.sqrt(len(scores))))), color="#38bdf8", edgecolor="white", alpha=0.88)
+    plt.axvline(scores.mean(), color="#ef4444", linestyle="--", linewidth=1.8, label=f"Mean {scores.mean():.3f}")
+    plt.title("Anomaly Score Distribution")
+    plt.xlabel("Anomaly score")
+    plt.ylabel("Count")
+    plt.legend()
+    return _figure_to_base64()
+
+
 def _build_clustering_plot(context: dict, model, plot_type: str) -> str:
     pc = context["pc"]
     features = pc.get_config("X_train_transformed")
@@ -1777,6 +2073,12 @@ def get_plot(experiment_id: int, algorithm: str, plot_type: str, use_train_data:
         return _image_payload(
             _build_anomaly_embedding_plot(context, model, plot_type),
             native_source=f"anomaly_{plot_type}_fallback",
+            fallback_used=True,
+        )
+    if context["module_type"] == "anomaly" and plot_type == "score":
+        return _image_payload(
+            _build_anomaly_score_plot(context, model),
+            native_source="anomaly_score_fallback",
             fallback_used=True,
         )
     if context["module_type"] == "clustering" and plot_type in {"cluster", "tsne"}:
@@ -1894,26 +2196,140 @@ def _candidate_native_dependence_features(features: pd.DataFrame | None) -> list
     return ordered
 
 
-def _native_xai_support(context: dict, plot_type: str) -> tuple[bool, str]:
-    if context["module_type"] not in {"classification", "regression"}:
-        return False, "interpret_model()은 현재 분류와 회귀 모듈에서만 사용합니다."
-    if plot_type == "pfi" and not _has_interpret_community():
-        return False, "interpret_community 패키지가 없어 native PFI를 사용할 수 없습니다."
+XAI_FAMILY_LABELS = {
+    "linear": "선형",
+    "tree": "트리",
+    "boosting": "부스팅",
+    "ensemble": "앙상블",
+    "neighbors": "최근접 이웃",
+    "svm": "서포트 벡터",
+    "probabilistic": "확률 기반",
+    "other": "기타",
+}
+
+
+def _resolve_xai_estimator_family(module_type: str, algorithm: str | None) -> str:
+    if not algorithm:
+        return "other"
+    family, _ = _infer_model_family(module_type, _slugify_algorithm(algorithm), algorithm, "")
+    return family
+
+
+def _get_xai_native_policy(module_type: str, plot_type: str, algorithm: str | None = None) -> dict:
+    estimator_family = _resolve_xai_estimator_family(module_type, algorithm)
+    family_label = XAI_FAMILY_LABELS.get(estimator_family, _sanitize_column_name(estimator_family))
+
+    if module_type not in {"classification", "regression"}:
+        return {
+            "plot_type": plot_type,
+            "native_supported": False,
+            "fallback_supported": True,
+            "source_preference": "fallback",
+            "support_level": "fallback_only",
+            "estimator_family": estimator_family,
+            "estimator_family_label": family_label,
+            "notes": "XAI native 경로는 현재 분류와 회귀 모듈에서만 사용합니다.",
+        }
+
     if plot_type not in {"summary", "dependence", "pfi"}:
-        return False, f"native interpret_model() 미지원 XAI 항목입니다: {plot_type}"
-    return True, "interpret_model()을 우선 시도합니다."
+        return {
+            "plot_type": plot_type,
+            "native_supported": False,
+            "fallback_supported": True,
+            "source_preference": "fallback",
+            "support_level": "fallback_only",
+            "estimator_family": estimator_family,
+            "estimator_family_label": family_label,
+            "notes": f"현재 XAI native 정책에 등록되지 않은 항목입니다: {plot_type}",
+        }
+
+    if plot_type == "pfi":
+        if not _has_interpret_community():
+            return {
+                "plot_type": plot_type,
+                "native_supported": False,
+                "fallback_supported": True,
+                "source_preference": "fallback",
+                "support_level": "fallback_only",
+                "estimator_family": estimator_family,
+                "estimator_family_label": family_label,
+                "notes": "interpret_community 패키지가 없어 앱 fallback PFI를 기본 경로로 사용합니다.",
+            }
+        return {
+            "plot_type": plot_type,
+            "native_supported": True,
+            "fallback_supported": True,
+            "source_preference": "native",
+            "support_level": "conditional",
+            "estimator_family": estimator_family,
+            "estimator_family_label": family_label,
+            "notes": f"{family_label} 계열 모델에서 interpret_model(plot='pfi')를 먼저 시도하고, 실패하면 앱 fallback PFI를 사용합니다.",
+        }
+
+    if plot_type == "dependence":
+        return {
+            "plot_type": plot_type,
+            "native_supported": True,
+            "fallback_supported": True,
+            "source_preference": "native",
+            "support_level": "conditional",
+            "estimator_family": estimator_family,
+            "estimator_family_label": family_label,
+            "notes": f"{family_label} 계열 모델에서 interpret_model(plot='correlation')을 먼저 시도합니다. 숫자형 feature 조건이 맞지 않으면 앱 fallback SHAP dependence로 내려갑니다.",
+        }
+
+    summary_support_level = "preferred" if estimator_family in {"linear", "tree", "probabilistic"} else "conditional"
+    summary_notes = (
+        f"{family_label} 계열 모델은 interpret_model(plot='summary') native 우선 성공 가능성이 높습니다."
+        if summary_support_level == "preferred"
+        else f"{family_label} 계열 모델은 interpret_model(plot='summary')를 먼저 시도하되, estimator/환경에 따라 앱 fallback SHAP summary로 내려갈 수 있습니다."
+    )
+    return {
+        "plot_type": plot_type,
+        "native_supported": True,
+        "fallback_supported": True,
+        "source_preference": "native",
+        "support_level": summary_support_level,
+        "estimator_family": estimator_family,
+        "estimator_family_label": family_label,
+        "notes": summary_notes,
+    }
 
 
-def _try_native_interpret_plot(context: dict, model, plot_type: str, use_train_data: bool, features: pd.DataFrame | None = None) -> tuple[dict | None, str]:
+def _attach_xai_policy(payload: dict, policy: dict) -> dict:
+    payload.update(
+        {
+            "estimator_family": policy.get("estimator_family"),
+            "estimator_family_label": policy.get("estimator_family_label"),
+            "support_level": policy.get("support_level"),
+            "effective_support_level": policy.get("effective_support_level", policy.get("support_level")),
+            "policy_note": policy.get("notes"),
+            "effective_policy_note": policy.get("effective_policy_note", policy.get("notes")),
+            "observed_status": policy.get("observed_status", "none"),
+            "observed_note": policy.get("observed_note", ""),
+            "observed_sample_count": policy.get("observed_sample_count", 0),
+        }
+    )
+    return payload
+
+
+def _try_native_interpret_plot(
+    context: dict,
+    model,
+    plot_type: str,
+    use_train_data: bool,
+    features: pd.DataFrame | None = None,
+    algorithm: str | None = None,
+) -> tuple[dict | None, str]:
     native_plot_map = {
         "summary": "summary",
         "dependence": "correlation",
         "pfi": "pfi",
     }
     native_plot = native_plot_map.get(plot_type)
-    supported, support_reason = _native_xai_support(context, plot_type)
-    if not native_plot or not supported:
-        return None, support_reason
+    policy = _get_xai_native_policy(context["module_type"], plot_type, algorithm)
+    if not native_plot or not policy["native_supported"]:
+        return None, policy["notes"]
 
     pc = context["pc"]
     feature_candidates = [None]
@@ -1941,12 +2357,15 @@ def _try_native_interpret_plot(context: dict, model, plot_type: str, use_train_d
                 if feature_name:
                     reason += f" / feature={feature_name}"
                 return (
-                    _image_payload(
-                        image_base64,
-                        native_source="interpret_model",
-                        fallback_used=False,
-                        native_attempted=True,
-                        native_reason=reason,
+                    _attach_xai_policy(
+                        _image_payload(
+                            image_base64,
+                            native_source="interpret_model",
+                            fallback_used=False,
+                            native_attempted=True,
+                            native_reason=reason,
+                        ),
+                        policy,
                     ),
                     reason,
                 )
@@ -1957,7 +2376,7 @@ def _try_native_interpret_plot(context: dict, model, plot_type: str, use_train_d
             else:
                 errors.append(str(exc))
 
-    return None, " / ".join(errors[:3]) if errors else support_reason
+    return None, " / ".join(errors[:3]) if errors else policy["notes"]
 
 
 def get_interpret_plot(
@@ -1975,21 +2394,58 @@ def get_interpret_plot(
     target_key = "y_train" if use_train_data or not supervised else "y_test"
     features = pc.get_config(original_features_key)
     xai_model, xai_features = _resolve_xai_model_and_features(context, model, use_train_data)
-    native_support, native_support_reason = _native_xai_support(context, plot_type)
-
-    if features is None or len(features) == 0 or len(xai_features) == 0:
-        return _image_payload(
-            "",
-            native_source="custom_xai_empty",
-            fallback_used=True,
-            native_attempted=native_support,
-            native_reason=native_support_reason if native_support else None,
-            fallback_reason="XAI에 사용할 feature frame이 비어 있습니다.",
+    policy = _get_xai_native_policy(context["module_type"], plot_type, algorithm)
+    native_support = policy["native_supported"]
+    native_support_reason = policy["notes"]
+    _cleanup_xai_snapshot_cache(experiment_id, algorithm)
+    cached_payload = _load_xai_snapshot_cache(experiment_id, algorithm, plot_type, use_train_data, row_index)
+    if cached_payload is not None:
+        return _attach_xai_cache_metadata(
+            _attach_xai_policy(cached_payload, policy),
+            experiment_id,
+            algorithm,
+            plot_type,
+            use_train_data,
+            row_index,
+            cache_hit=True,
         )
 
-    native_payload, native_failure_reason = _try_native_interpret_plot(context, model, plot_type, use_train_data, features)
+    if features is None or len(features) == 0 or len(xai_features) == 0:
+        return _attach_xai_policy(
+            _image_payload(
+                "",
+                native_source="custom_xai_empty",
+                fallback_used=True,
+                native_attempted=native_support,
+                native_reason=native_support_reason if native_support else None,
+                fallback_reason="XAI에 사용할 feature frame이 비어 있습니다.",
+            ),
+            policy,
+        )
+
+    native_payload, native_failure_reason = _try_native_interpret_plot(
+        context,
+        model,
+        plot_type,
+        use_train_data,
+        features,
+        algorithm,
+    )
     if native_payload is not None:
-        return native_payload
+        _store_xai_snapshot_cache(experiment_id, algorithm, plot_type, use_train_data, row_index, native_payload)
+        native_payload = _attach_xai_policy(
+            native_payload,
+            _current_xai_policy(context["module_type"], experiment_id, algorithm, plot_type),
+        )
+        return _attach_xai_cache_metadata(
+            native_payload,
+            experiment_id,
+            algorithm,
+            plot_type,
+            use_train_data,
+            row_index,
+            cache_hit=False,
+        )
 
     fallback_reason = native_failure_reason or (
         native_support_reason if not native_support else "native interpret_model() 결과를 확보하지 못했습니다."
@@ -2022,13 +2478,30 @@ def get_interpret_plot(
         plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#38bdf8")
         plt.title("SHAP Summary Importance")
         plt.xlabel("Mean |SHAP value|")
-        return _image_payload(
-            _figure_to_base64(),
-            native_source="custom_xai_summary",
-            fallback_used=True,
-            native_attempted=native_support,
-            native_reason=native_support_reason if native_support else None,
-            fallback_reason=fallback_reason,
+        payload = _attach_xai_policy(
+            _image_payload(
+                _figure_to_base64(),
+                native_source="custom_xai_summary",
+                fallback_used=True,
+                native_attempted=native_support,
+                native_reason=native_support_reason if native_support else None,
+                fallback_reason=fallback_reason,
+            ),
+            _current_xai_policy(context["module_type"], experiment_id, algorithm, plot_type),
+        )
+        _store_xai_snapshot_cache(experiment_id, algorithm, plot_type, use_train_data, row_index, payload)
+        payload = _attach_xai_policy(
+            payload,
+            _current_xai_policy(context["module_type"], experiment_id, algorithm, plot_type),
+        )
+        return _attach_xai_cache_metadata(
+            payload,
+            experiment_id,
+            algorithm,
+            plot_type,
+            use_train_data,
+            row_index,
+            cache_hit=False,
         )
 
     if plot_type == "dependence":
@@ -2063,13 +2536,30 @@ def get_interpret_plot(
         plt.title(f"SHAP Dependence: {_sanitize_column_name(feature_name)}")
         plt.xlabel(_sanitize_column_name(feature_name))
         plt.ylabel("SHAP value")
-        return _image_payload(
-            _figure_to_base64(),
-            native_source="custom_xai_dependence",
-            fallback_used=True,
-            native_attempted=native_support,
-            native_reason=native_support_reason if native_support else None,
-            fallback_reason=fallback_reason,
+        payload = _attach_xai_policy(
+            _image_payload(
+                _figure_to_base64(),
+                native_source="custom_xai_dependence",
+                fallback_used=True,
+                native_attempted=native_support,
+                native_reason=native_support_reason if native_support else None,
+                fallback_reason=fallback_reason,
+            ),
+            _current_xai_policy(context["module_type"], experiment_id, algorithm, plot_type),
+        )
+        _store_xai_snapshot_cache(experiment_id, algorithm, plot_type, use_train_data, row_index, payload)
+        payload = _attach_xai_policy(
+            payload,
+            _current_xai_policy(context["module_type"], experiment_id, algorithm, plot_type),
+        )
+        return _attach_xai_cache_metadata(
+            payload,
+            experiment_id,
+            algorithm,
+            plot_type,
+            use_train_data,
+            row_index,
+            cache_hit=False,
         )
 
     if plot_type == "pfi":
@@ -2096,19 +2586,36 @@ def get_interpret_plot(
         plt.barh([_sanitize_column_name(label) for label in ranked.index], ranked.values, color="#22c55e")
         plt.title("Permutation Feature Importance")
         plt.xlabel("Mean importance")
-        return _image_payload(
-            _figure_to_base64(),
-            native_source="custom_xai_pfi",
-            fallback_used=True,
-            native_attempted=native_support,
-            native_reason=native_support_reason if native_support else None,
-            fallback_reason=fallback_reason,
+        payload = _attach_xai_policy(
+            _image_payload(
+                _figure_to_base64(),
+                native_source="custom_xai_pfi",
+                fallback_used=True,
+                native_attempted=native_support,
+                native_reason=native_support_reason if native_support else None,
+                fallback_reason=fallback_reason,
+            ),
+            _current_xai_policy(context["module_type"], experiment_id, algorithm, plot_type),
+        )
+        _store_xai_snapshot_cache(experiment_id, algorithm, plot_type, use_train_data, row_index, payload)
+        payload = _attach_xai_policy(
+            payload,
+            _current_xai_policy(context["module_type"], experiment_id, algorithm, plot_type),
+        )
+        return _attach_xai_cache_metadata(
+            payload,
+            experiment_id,
+            algorithm,
+            plot_type,
+            use_train_data,
+            row_index,
+            cache_hit=False,
         )
 
     raise ValueError(f"Unsupported XAI plot type: {plot_type}")
 
 
-def list_plot_options(module_type: str) -> dict:
+def list_plot_options(module_type: str, algorithm: str | None = None, experiment_id: int | None = None) -> dict:
     def option(
         key: str,
         label: str,
@@ -2117,6 +2624,14 @@ def list_plot_options(module_type: str) -> dict:
         native_supported: bool,
         fallback_supported: bool,
         notes: str = "",
+        estimator_family: str | None = None,
+        estimator_family_label: str | None = None,
+        support_level: str | None = None,
+        effective_support_level: str | None = None,
+        effective_policy_note: str | None = None,
+        observed_status: str | None = None,
+        observed_note: str | None = None,
+        observed_sample_count: int | None = None,
     ) -> dict:
         return {
             "key": key,
@@ -2126,6 +2641,14 @@ def list_plot_options(module_type: str) -> dict:
             "native_supported": native_supported,
             "fallback_supported": fallback_supported,
             "notes": notes,
+            "estimator_family": estimator_family,
+            "estimator_family_label": estimator_family_label,
+            "support_level": support_level,
+            "effective_support_level": effective_support_level or support_level,
+            "effective_policy_note": effective_policy_note or notes,
+            "observed_status": observed_status or "none",
+            "observed_note": observed_note or "",
+            "observed_sample_count": observed_sample_count or 0,
         }
 
     model_plots = {
@@ -2151,6 +2674,7 @@ def list_plot_options(module_type: str) -> dict:
         ],
         "anomaly": [
             option("tsne", "t-SNE", "plot", "fallback", False, True, "Custom fallback embedding."),
+            option("score", "이상치 점수 분포", "plot", "fallback", False, True, "Custom fallback histogram from assigned anomaly scores."),
             *([option("umap", "UMAP", "plot", "fallback", False, True, "Custom fallback embedding.")] if _has_umap() else []),
         ],
         "timeseries": [
@@ -2160,24 +2684,125 @@ def list_plot_options(module_type: str) -> dict:
             option("pacf", "PACF", "plot", "native", True, True, "Uses native plot_model(return_fig=True) with PNG fallback."),
         ],
     }
-    pfi_native_available = _has_interpret_community()
-    pfi_source_preference = "native" if pfi_native_available else "fallback"
-    pfi_notes = (
-        "interpret_model(plot='pfi')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."
-        if pfi_native_available
-        else "interpret_community 패키지가 없어 앱 fallback PFI를 기본 경로로 사용합니다."
+    observations = summarize_xai_cache_observations(experiment_id, algorithm) if experiment_id and algorithm else {}
+    summary_policy = _merge_xai_policy_observation(
+        _get_xai_native_policy(module_type, "summary", algorithm),
+        observations.get("summary", {}),
     )
-
+    dependence_policy = _merge_xai_policy_observation(
+        _get_xai_native_policy(module_type, "dependence", algorithm),
+        observations.get("dependence", {}),
+    )
+    pfi_policy = _merge_xai_policy_observation(
+        _get_xai_native_policy(module_type, "pfi", algorithm),
+        observations.get("pfi", {}),
+    )
     xai_plots = {
         "classification": [
-            option("summary", "SHAP 요약", "xai", "native", True, True, "interpret_model(plot='summary')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
-            option("dependence", "SHAP 의존도", "xai", "native", True, True, "interpret_model(plot='correlation')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
-            option("pfi", "Permutation 중요도", "xai", pfi_source_preference, pfi_native_available, True, pfi_notes),
+            option(
+                "summary",
+                "SHAP 요약",
+                "xai",
+                summary_policy["source_preference"],
+                summary_policy["native_supported"],
+                summary_policy["fallback_supported"],
+                summary_policy["notes"],
+                summary_policy["estimator_family"],
+                summary_policy["estimator_family_label"],
+                summary_policy["support_level"],
+                summary_policy["effective_support_level"],
+                summary_policy["effective_policy_note"],
+                summary_policy["observed_status"],
+                summary_policy["observed_note"],
+                summary_policy["observed_sample_count"],
+            ),
+            option(
+                "dependence",
+                "SHAP 의존도",
+                "xai",
+                dependence_policy["source_preference"],
+                dependence_policy["native_supported"],
+                dependence_policy["fallback_supported"],
+                dependence_policy["notes"],
+                dependence_policy["estimator_family"],
+                dependence_policy["estimator_family_label"],
+                dependence_policy["support_level"],
+                dependence_policy["effective_support_level"],
+                dependence_policy["effective_policy_note"],
+                dependence_policy["observed_status"],
+                dependence_policy["observed_note"],
+                dependence_policy["observed_sample_count"],
+            ),
+            option(
+                "pfi",
+                "Permutation 중요도",
+                "xai",
+                pfi_policy["source_preference"],
+                pfi_policy["native_supported"],
+                pfi_policy["fallback_supported"],
+                pfi_policy["notes"],
+                pfi_policy["estimator_family"],
+                pfi_policy["estimator_family_label"],
+                pfi_policy["support_level"],
+                pfi_policy["effective_support_level"],
+                pfi_policy["effective_policy_note"],
+                pfi_policy["observed_status"],
+                pfi_policy["observed_note"],
+                pfi_policy["observed_sample_count"],
+            ),
         ],
         "regression": [
-            option("summary", "SHAP 요약", "xai", "native", True, True, "interpret_model(plot='summary')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
-            option("dependence", "SHAP 의존도", "xai", "native", True, True, "interpret_model(plot='correlation')를 먼저 시도하고, 실패하면 앱 fallback을 사용합니다."),
-            option("pfi", "Permutation 중요도", "xai", pfi_source_preference, pfi_native_available, True, pfi_notes),
+            option(
+                "summary",
+                "SHAP 요약",
+                "xai",
+                summary_policy["source_preference"],
+                summary_policy["native_supported"],
+                summary_policy["fallback_supported"],
+                summary_policy["notes"],
+                summary_policy["estimator_family"],
+                summary_policy["estimator_family_label"],
+                summary_policy["support_level"],
+                summary_policy["effective_support_level"],
+                summary_policy["effective_policy_note"],
+                summary_policy["observed_status"],
+                summary_policy["observed_note"],
+                summary_policy["observed_sample_count"],
+            ),
+            option(
+                "dependence",
+                "SHAP 의존도",
+                "xai",
+                dependence_policy["source_preference"],
+                dependence_policy["native_supported"],
+                dependence_policy["fallback_supported"],
+                dependence_policy["notes"],
+                dependence_policy["estimator_family"],
+                dependence_policy["estimator_family_label"],
+                dependence_policy["support_level"],
+                dependence_policy["effective_support_level"],
+                dependence_policy["effective_policy_note"],
+                dependence_policy["observed_status"],
+                dependence_policy["observed_note"],
+                dependence_policy["observed_sample_count"],
+            ),
+            option(
+                "pfi",
+                "Permutation 중요도",
+                "xai",
+                pfi_policy["source_preference"],
+                pfi_policy["native_supported"],
+                pfi_policy["fallback_supported"],
+                pfi_policy["notes"],
+                pfi_policy["estimator_family"],
+                pfi_policy["estimator_family_label"],
+                pfi_policy["support_level"],
+                pfi_policy["effective_support_level"],
+                pfi_policy["effective_policy_note"],
+                pfi_policy["observed_status"],
+                pfi_policy["observed_note"],
+                pfi_policy["observed_sample_count"],
+            ),
         ],
     }
     return {

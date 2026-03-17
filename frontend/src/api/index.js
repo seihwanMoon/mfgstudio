@@ -37,7 +37,11 @@ export const dashboardAPI = {
 export const analyzeAPI = {
   plot: (payload) => api.post("/api/analyze/plot", payload),
   interpret: (payload) => api.post("/api/analyze/interpret", payload),
-  listPlots: (moduleType) => api.get(`/api/analyze/plots/list?module_type=${moduleType}`),
+  listPlots: (moduleType, algorithm = "", experimentId = "") =>
+    api.get(
+      `/api/analyze/plots/list?module_type=${moduleType}${algorithm ? `&algorithm=${encodeURIComponent(algorithm)}` : ""}${experimentId ? `&experiment_id=${encodeURIComponent(experimentId)}` : ""}`
+    ),
+  xaiMatrix: (experimentId) => api.get(`/api/analyze/xai/matrix?experiment_id=${experimentId}`),
 }
 
 export const registryAPI = {
@@ -75,6 +79,8 @@ export const opsAPI = {
   archiveExperiment: (experimentId) => api.put(`/api/ops/experiments/${experimentId}/archive`),
   deleteExperiment: (experimentId) => api.delete(`/api/ops/experiments/${experimentId}`),
   reports: () => api.get("/api/ops/reports"),
+  cacheStatus: () => api.get("/api/ops/cache-status"),
+  cleanupCache: () => api.post("/api/ops/cache-cleanup"),
   deleteReport: (modelId) => api.delete(`/api/ops/reports/${modelId}`),
   retirePreview: (modelId) => api.get(`/api/ops/models/${modelId}/retire-preview`),
   retireModel: (modelId) => api.post(`/api/ops/models/${modelId}/retire`),

@@ -3,8 +3,9 @@ function optionKey(option) {
 }
 
 function SourceBadge({ option }) {
-  const label = option.source_preference === "native" ? "기본 경로 우선" : "대체 경로"
-  const color = option.source_preference === "native" ? "var(--success)" : "var(--warning)"
+  const isNative = option.source_preference === "native"
+  const label = isNative ? "native 우선" : "fallback 우선"
+  const color = isNative ? "var(--success)" : "var(--warning)"
   return (
     <span
       style={{
@@ -24,13 +25,68 @@ function SourceBadge({ option }) {
   )
 }
 
+function SupportBadge({ level = "" }) {
+  const palette = {
+    preferred: { label: "native 강함", color: "var(--success)" },
+    conditional: { label: "조건부 native", color: "var(--accent-blue)" },
+    fallback_only: { label: "fallback 전용", color: "var(--warning)" },
+  }
+  const current = palette[level]
+  if (!current) return null
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "2px 8px",
+        borderRadius: 999,
+        border: `1px solid ${current.color}55`,
+        background: `${current.color}18`,
+        color: current.color,
+        fontSize: 10,
+        fontWeight: 800,
+      }}
+    >
+      {current.label}
+    </span>
+  )
+}
+
+function ObservationBadge({ status = "none", sampleCount = 0 }) {
+  const palette = {
+    native_only: { label: "native 관찰", color: "var(--success)" },
+    mixed: { label: "혼합 관찰", color: "var(--accent-blue)" },
+    fallback_only: { label: "fallback 관찰", color: "var(--warning)" },
+    none: { label: "관찰 없음", color: "var(--text-muted)" },
+  }
+  const current = palette[status] || palette.none
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "2px 8px",
+        borderRadius: 999,
+        border: `1px solid ${current.color}55`,
+        background: `${current.color}18`,
+        color: current.color,
+        fontSize: 10,
+        fontWeight: 800,
+      }}
+    >
+      {current.label} {sampleCount > 0 ? `· ${sampleCount}` : ""}
+    </span>
+  )
+}
+
 export default function PlotSelector({
   plots = [],
   value,
   onChange,
   onRefresh,
   title = "분석 옵션",
-  description = "가능하면 PyCaret 기본 렌더링을 우선 사용합니다. 대체 경로 항목은 별도로 표시되어 실제 사용 경로를 바로 확인할 수 있습니다.",
+  description = "가능하면 PyCaret native 경로를 먼저 사용하고, 실패하면 앱 fallback으로 내려갑니다. 실험별 관찰 이력이 있으면 함께 표시합니다.",
   emptyMessage = "사용 가능한 분석 항목이 없습니다.",
   buttonLabel = "그래프 새로고침",
 }) {
@@ -50,9 +106,7 @@ export default function PlotSelector({
       }}
     >
       <h3 style={{ margin: 0, color: "var(--text-primary)" }}>{title}</h3>
-      <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5 }}>
-        {description}
-      </div>
+      <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5 }}>{description}</div>
 
       <Section title="모델 그래프" items={modelPlots} value={value} onChange={onChange} />
       {xaiPlots.length ? <Section title="XAI 그래프" items={xaiPlots} value={value} onChange={onChange} /> : null}
@@ -107,7 +161,18 @@ function Section({ title, items, value, onChange }) {
               <span>{plot.label}</span>
               <SourceBadge option={plot} />
             </div>
-            {plot.notes ? <div style={{ fontSize: 11, lineHeight: 1.4, opacity: 0.82 }}>{plot.notes}</div> : null}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <SupportBadge level={plot.effective_support_level || plot.support_level} />
+              <ObservationBadge status={plot.observed_status} sampleCount={plot.observed_sample_count} />
+              {plot.estimator_family_label ? (
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>계열: {plot.estimator_family_label}</span>
+              ) : null}
+            </div>
+            {plot.effective_policy_note ? (
+              <div style={{ fontSize: 11, lineHeight: 1.4, opacity: 0.82 }}>{plot.effective_policy_note}</div>
+            ) : plot.notes ? (
+              <div style={{ fontSize: 11, lineHeight: 1.4, opacity: 0.82 }}>{plot.notes}</div>
+            ) : null}
           </button>
         )
       })}

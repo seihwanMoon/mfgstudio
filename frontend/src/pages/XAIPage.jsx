@@ -7,6 +7,7 @@ import PlotSelector from "../components/analyze/PlotSelector"
 import ShapIndexSelector from "../components/analyze/ShapIndexSelector"
 import ShapWaterfall from "../components/analyze/ShapWaterfall"
 import TrainTestToggle from "../components/analyze/TrainTestToggle"
+import XaiPolicyMatrix from "../components/analyze/XaiPolicyMatrix"
 import useStore from "../store/useStore"
 
 function getOptionKey(option) {
@@ -24,17 +25,38 @@ export default function XAIPage() {
   const [models, setModels] = useState([])
   const [modelId, setModelId] = useState(null)
   const [plotOptions, setPlotOptions] = useState([])
+  const [matrixRows, setMatrixRows] = useState([])
   const [selectedPlotKey, setSelectedPlotKey] = useState("")
   const [image, setImage] = useState("")
   const [plotlyFigureJson, setPlotlyFigureJson] = useState("")
   const [renderMode, setRenderMode] = useState("image")
-  const [plotMeta, setPlotMeta] = useState({ nativeSource: "", fallbackUsed: false, nativeReason: "", fallbackReason: "" })
+  const [plotMeta, setPlotMeta] = useState({
+    nativeSource: "",
+    fallbackUsed: false,
+    nativeReason: "",
+    fallbackReason: "",
+    estimatorFamilyLabel: "",
+    supportLevel: "",
+    effectiveSupportLevel: "",
+    policyNote: "",
+    effectivePolicyNote: "",
+    observedStatus: "",
+    observedNote: "",
+    observedSampleCount: 0,
+    cacheHit: false,
+    cachePath: "",
+  })
   const [rowIndex, setRowIndex] = useState(0)
   const [shapResult, setShapResult] = useState(null)
   const [useTrainData, setUseTrainData] = useState(false)
   const [isLoadingPlot, setIsLoadingPlot] = useState(false)
   const [plotError, setPlotError] = useState("")
   const [shapError, setShapError] = useState("")
+
+  const selectedModel = useMemo(
+    () => models.find((item) => Number(item.id) === Number(modelId)) || null,
+    [models, modelId]
+  )
 
   const selectedPlot = useMemo(
     () => plotOptions.find((option) => getOptionKey(option) === selectedPlotKey) || null,
@@ -49,8 +71,15 @@ export default function XAIPage() {
       const selected = response.find((item) => item.algorithm === selectedModelsForTune[0]) || response[0]
       if (selected) setModelId(selected.id)
     })
+  }, [currentExperimentId, selectedModelsForTune])
 
-    analyzeAPI.listPlots(moduleType).then((response) => {
+  useEffect(() => {
+    if (!currentExperimentId) return
+    refreshMatrix()
+  }, [currentExperimentId])
+
+  useEffect(() => {
+    analyzeAPI.listPlots(moduleType, selectedModel?.algorithm || "", currentExperimentId || "").then((response) => {
       const nextOptions = response.xai || []
       setPlotOptions(nextOptions)
       setSelectedPlotKey((current) => {
@@ -58,12 +87,22 @@ export default function XAIPage() {
         return hasCurrent ? current : getOptionKey(nextOptions[0] || { family: "xai", key: "" })
       })
     })
-  }, [currentExperimentId, moduleType, selectedModelsForTune])
+  }, [moduleType, selectedModel?.algorithm, currentExperimentId])
 
   useEffect(() => {
     if (!modelId || !selectedPlot) return
     handlePlot()
   }, [modelId, selectedPlotKey, useTrainData])
+
+  async function refreshMatrix() {
+    if (!currentExperimentId) return
+    try {
+      const response = await analyzeAPI.xaiMatrix(currentExperimentId)
+      setMatrixRows(response.rows || [])
+    } catch {
+      setMatrixRows([])
+    }
+  }
 
   async function handlePlot() {
     if (!modelId || !selectedPlot) return
@@ -86,12 +125,38 @@ export default function XAIPage() {
         fallbackUsed: Boolean(response.fallback_used),
         nativeReason: response.native_reason || "",
         fallbackReason: response.fallback_reason || "",
+        estimatorFamilyLabel: response.estimator_family_label || selectedPlot.estimator_family_label || "",
+        supportLevel: response.support_level || selectedPlot.support_level || "",
+        effectiveSupportLevel: response.effective_support_level || selectedPlot.effective_support_level || "",
+        policyNote: response.policy_note || selectedPlot.notes || "",
+        effectivePolicyNote: response.effective_policy_note || selectedPlot.effective_policy_note || "",
+        observedStatus: response.observed_status || selectedPlot.observed_status || "",
+        observedNote: response.observed_note || selectedPlot.observed_note || "",
+        observedSampleCount: Number(response.observed_sample_count ?? selectedPlot.observed_sample_count ?? 0),
+        cacheHit: Boolean(response.cache_hit),
+        cachePath: response.cache_path || "",
       })
+      refreshMatrix()
     } catch (error) {
       setImage("")
       setPlotlyFigureJson("")
       setRenderMode("image")
-      setPlotMeta({ nativeSource: "", fallbackUsed: false, nativeReason: "", fallbackReason: "" })
+      setPlotMeta({
+        nativeSource: "",
+        fallbackUsed: false,
+        nativeReason: "",
+        fallbackReason: "",
+        estimatorFamilyLabel: "",
+        supportLevel: "",
+        effectiveSupportLevel: "",
+        policyNote: "",
+        effectivePolicyNote: "",
+        observedStatus: "",
+        observedNote: "",
+        observedSampleCount: 0,
+        cacheHit: false,
+        cachePath: "",
+      })
       setPlotError(error?.detail || "XAI 그래프를 생성하지 못했습니다.")
     } finally {
       setIsLoadingPlot(false)
@@ -127,7 +192,7 @@ export default function XAIPage() {
         onChange={setSelectedPlotKey}
         onRefresh={handlePlot}
         title="XAI"
-        description="설명 그래프를 진단 그래프와 분리해 두고, 이후 XAI 기능을 독립적으로 확장할 수 있도록 구성했습니다."
+        description="선택한 모델 기준으로 native 우선 경로와 fallback 정책, 그리고 실험에서 실제 관찰된 결과를 함께 보여줍니다."
         emptyMessage="이 모듈에서 사용할 수 있는 XAI 그래프가 없습니다."
         buttonLabel="XAI 새로고침"
       />
@@ -145,9 +210,10 @@ export default function XAIPage() {
           }}
         >
           <div>
-            <div style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 700, marginBottom: 4 }}>XAI 작업공간</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 700, marginBottom: 4 }}>XAI 작업 공간</div>
             <div style={{ color: "var(--text-primary)", fontSize: 14, lineHeight: 1.6 }}>
-              전역 설명 그래프와 행 단위 SHAP 확인 기능을 한 화면에 모았습니다. 학습 진단 그래프와 분리해 XAI 기능을 별도로 확장할 수 있습니다.
+              선택 모델별 XAI 정책, 실제 렌더 경로, 누적 관찰 결과를 함께 확인할 수 있습니다. 진단 그래프는 `Plots`,
+              설명 그래프는 `XAI`에서 분리해서 관리합니다.
             </div>
           </div>
 
@@ -220,7 +286,19 @@ export default function XAIPage() {
           sourcePreference={selectedPlot?.source_preference}
           nativeReason={plotMeta.nativeReason}
           fallbackReason={plotMeta.fallbackReason}
+          estimatorFamilyLabel={plotMeta.estimatorFamilyLabel}
+          supportLevel={plotMeta.supportLevel}
+          effectiveSupportLevel={plotMeta.effectiveSupportLevel}
+          policyNote={plotMeta.policyNote}
+          effectivePolicyNote={plotMeta.effectivePolicyNote}
+          observedStatus={plotMeta.observedStatus}
+          observedNote={plotMeta.observedNote}
+          observedSampleCount={plotMeta.observedSampleCount}
+          cacheHit={plotMeta.cacheHit}
+          cachePath={plotMeta.cachePath}
         />
+
+        <XaiPolicyMatrix rows={matrixRows} selectedModelId={modelId} moduleType={moduleType} />
       </div>
 
       <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -247,8 +325,8 @@ export default function XAIPage() {
           disabled={!isShapSupported}
           helperText={
             isShapSupported
-              ? "개별 설명을 확인할 행 번호를 입력해 주세요. 0이 첫 번째 샘플입니다."
-              : "이 모듈은 아직 개별 SHAP를 지원하지 않습니다. 왼쪽의 설명 그래프를 사용해 주세요."
+              ? "개별 설명을 확인할 행 번호를 입력해 주세요. 0은 첫 번째 샘플입니다."
+              : "이 모듈은 아직 개별 SHAP를 지원하지 않습니다. 왼쪽 XAI 그래프를 사용해 주세요."
           }
         />
       </div>

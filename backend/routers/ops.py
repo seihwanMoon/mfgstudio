@@ -13,6 +13,7 @@ from models.dataset import Dataset
 from models.experiment import Experiment
 from models.prediction import Prediction
 from models.trained_model import TrainedModel
+from services.artifact_cache import cleanup_cache_tree, retention_seconds, summarize_cache_directory
 from services.mlflow_service import delete_model_version, transition_model_stage
 from services.pycaret_service import EXPERIMENT_CONTEXTS
 from services.report_service import resolve_report_path
@@ -22,6 +23,21 @@ router = APIRouter()
 
 def _experiment_dir(experiment_id: int) -> Path:
     return Path(settings.experiment_dir) / f"experiment_{experiment_id}"
+
+
+def _cache_status_payload() -> dict:
+    report_chart_root = Path(settings.report_dir) / "chart_cache"
+    xai_snapshot_root = Path(settings.report_dir) / "xai_cache"
+    return {
+        "policy": {
+            "report_chart_cache_retention_days": settings.report_chart_cache_retention_days,
+            "xai_snapshot_cache_retention_days": settings.xai_snapshot_cache_retention_days,
+            "report_chart_cache_dir": str(report_chart_root),
+            "xai_snapshot_cache_dir": str(xai_snapshot_root),
+        },
+        "report_chart_cache": summarize_cache_directory(report_chart_root, recursive=True),
+        "xai_snapshot_cache": summarize_cache_directory(xai_snapshot_root, recursive=True),
+    }
 
 
 def _prediction_counts(db: Session) -> dict[int, int]:
@@ -323,6 +339,32 @@ def list_managed_reports(db: Session = Depends(get_db)):
             }
         )
     return {"reports": payload}
+
+
+@router.get("/cache-status")
+def get_cache_status():
+    return _cache_status_payload()
+
+
+@router.post("/cache-cleanup")
+def cleanup_cache_status():
+    report_chart_root = Path(settings.report_dir) / "chart_cache"
+    xai_snapshot_root = Path(settings.report_dir) / "xai_cache"
+    report_cleanup = cleanup_cache_tree(
+        report_chart_root,
+        max_age_seconds=retention_seconds(settings.report_chart_cache_retention_days),
+    )
+    xai_cleanup = cleanup_cache_tree(
+        xai_snapshot_root,
+        max_age_seconds=retention_seconds(settings.xai_snapshot_cache_retention_days),
+    )
+    return {
+        "cleanup": {
+            "report_chart_cache": report_cleanup,
+            "xai_snapshot_cache": xai_cleanup,
+        },
+        **_cache_status_payload(),
+    }
 
 
 @router.delete("/reports/{model_id}")

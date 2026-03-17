@@ -8,7 +8,14 @@ from database import get_db
 from models.dataset import Dataset
 from models.experiment import Experiment
 from models.trained_model import TrainedModel
-from services.pycaret_service import ensure_experiment_context, get_interpret_plot, get_plot, get_shap, list_plot_options
+from services.pycaret_service import (
+    ensure_experiment_context,
+    get_interpret_plot,
+    get_plot,
+    get_shap,
+    get_xai_policy_matrix_row,
+    list_plot_options,
+)
 
 router = APIRouter()
 
@@ -102,5 +109,38 @@ def interpret_model(payload: InterpretRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/plots/list")
-def list_plots(module_type: str = "classification"):
-    return list_plot_options(module_type)
+def list_plots(module_type: str = "classification", algorithm: str | None = None, experiment_id: int | None = None):
+    return list_plot_options(module_type, algorithm, experiment_id)
+
+
+@router.get("/xai/matrix")
+def get_xai_matrix(experiment_id: int, db: Session = Depends(get_db)):
+    experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    models = (
+        db.query(TrainedModel)
+        .filter(TrainedModel.experiment_id == experiment_id)
+        .order_by(TrainedModel.updated_at.desc(), TrainedModel.id.desc())
+        .all()
+    )
+    rows = []
+    for model in models:
+        matrix_row = get_xai_policy_matrix_row(experiment.module_type, experiment_id, model.algorithm)
+        rows.append(
+            {
+                "model_id": model.id,
+                "algorithm": model.algorithm,
+                "is_tuned": bool(model.is_tuned),
+                "stage": model.stage or "None",
+                "updated_at": model.updated_at.isoformat() if model.updated_at else None,
+                **matrix_row,
+            }
+        )
+
+    return {
+        "experiment_id": experiment_id,
+        "module_type": experiment.module_type,
+        "rows": rows,
+    }

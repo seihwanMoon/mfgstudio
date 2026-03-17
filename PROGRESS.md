@@ -1,7 +1,7 @@
 # PROGRESS
 
 > Rule: check this file before starting work, mark completed items with `[x]`, and record blockers under `Error Log`.
-> Current status reflects the codebase as of 2026-03-13.
+> Current status reflects the codebase as of 2026-03-17.
 
 ---
 
@@ -19,8 +19,22 @@ All planned tasks are currently complete.
 
 ## Recent Updates
 
+- 2026-03-17: XAI list/plot responses now include `effective_support_level` and `effective_policy_note`, so experiment-level observed native/fallback history can override family-only heuristics.
+- 2026-03-17: added `GET /api/analyze/xai/matrix` so the XAI page can show a model-by-model native policy matrix with observed `native / fallback / mixed` cache results.
+- 2026-03-17: added `POST /api/ops/cache-cleanup` and a matching operations-panel action so operators can prune report/XAI caches on demand using the configured retention policy.
+- 2026-03-17: externalized artifact-cache retention into backend settings with `report_chart_cache_retention_days=30` and `xai_snapshot_cache_retention_days=14`.
+- 2026-03-17: added `GET /api/ops/cache-status` so the operations UI can inspect artifact-cache policy, pair counts, file counts, storage size, and latest update times.
+- 2026-03-17: rebuilt `MLflow > Operations` in clean Korean and added an artifact-cache visibility section with refresh support.
+- 2026-03-17: added artifact cache cleanup rules so obsolete report-chart files and stale XAI snapshot files are pruned automatically during cache access.
+- 2026-03-17: introduced shared artifact-cache metadata/signature helpers so report chart cache and XAI snapshot cache now invalidate per artifact when metadata signatures no longer match.
+- 2026-03-17: added XAI snapshot cache so repeated `summary` / `dependence` / `pfi` requests can reuse saved PNG + metadata artifacts under `reports/xai_cache/...`.
+- 2026-03-17: added model-level report chart cache under `reports/chart_cache/model_{id}` so regenerated PDFs can reuse existing report-safe PNG artifacts.
+- 2026-03-17: added estimator-aware XAI native-first policy metadata so selected-model XAI menus now distinguish `preferred`, `conditional`, and `fallback_only` support levels.
+- 2026-03-17: expanded report chart coverage for clustering and anomaly reports so `엘보 차트` and `이상치 점수 분포` now join the existing fallback-safe charts.
 - 2026-03-17: expanded report-safe chart coverage so time-series reports now embed `예측 추세` and `잔차 플롯`, while clustering/anomaly report flows remain verified on their stable fallback charts.
 - 2026-03-17: added `mlflow_synced` visibility to operations payloads and refreshed the operations panel so `MLflow fallback` models can be filtered and inspected from the management UI.
+- 2026-03-17: rewrote the report service and PDF template copy in clean Korean and revalidated report generation with representative time-series charts.
+- 2026-03-17: applied read-path fail-fast handling to MLflow experiment/model queries so the UI degrades to empty lists quickly when the tracking host is unreachable.
 - 2026-03-13: documented the latest handoff baseline after commits `8b5fd2f` and `3b145bc`, so the next cycle can resume from report-chart expansion, XAI native-first cleanup, and remaining localization work without rediscovery.
 - 2026-03-13: exposed `mlflow_synced` fallback status and clearer Korean copy on the Finalize / registry-stage flow so local-only execution can explain when app metadata fallback was used.
 - 2026-03-13: hardened MLflow integration so `finalize`, registry registration, and Production stage changes degrade to local fallback metadata instead of failing when the configured tracking host is unreachable.

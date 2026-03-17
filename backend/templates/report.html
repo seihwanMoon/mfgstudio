@@ -18,8 +18,13 @@
 
       h1,
       h2,
+      h3,
       p {
         margin: 0;
+      }
+
+      section {
+        margin-bottom: 16px;
       }
 
       .hero {
@@ -27,7 +32,6 @@
         border-radius: 18px;
         color: #ffffff;
         background: linear-gradient(135deg, #0f3e72 0%, #1f7ad3 52%, #57c2ff 100%);
-        margin-bottom: 18px;
       }
 
       .hero-subtitle {
@@ -37,7 +41,8 @@
 
       .meta-grid,
       .card-grid,
-      .two-col {
+      .two-col,
+      .chart-grid {
         display: grid;
         gap: 10px;
       }
@@ -49,26 +54,14 @@
 
       .card-grid {
         grid-template-columns: repeat(4, 1fr);
-        margin-bottom: 16px;
       }
 
       .two-col {
-        grid-template-columns: 1.2fr 1fr;
-        margin-bottom: 16px;
+        grid-template-columns: 1.15fr 1fr;
       }
 
-      .panel {
-        border: 1px solid #d9e7f4;
-        border-radius: 14px;
-        background: #ffffff;
-        padding: 14px 16px;
-        margin-bottom: 14px;
-      }
-
-      .panel-title {
-        font-size: 14px;
-        font-weight: 700;
-        margin-bottom: 10px;
+      .chart-grid {
+        grid-template-columns: repeat(2, 1fr);
       }
 
       .mini {
@@ -78,11 +71,32 @@
         padding: 10px 12px;
       }
 
-      .kpi {
+      .panel,
+      .kpi,
+      .chart-card {
         border: 1px solid #d9e7f4;
         border-radius: 14px;
+        background: #ffffff;
+      }
+
+      .panel {
+        padding: 14px 16px;
+      }
+
+      .kpi {
         background: #f7fbff;
         padding: 12px;
+      }
+
+      .chart-card {
+        padding: 12px;
+        background: #f8fbff;
+      }
+
+      .panel-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 10px;
       }
 
       .label {
@@ -160,23 +174,6 @@
         color: #b7791f;
       }
 
-      .section-break {
-        margin-top: 8px;
-      }
-
-      .chart-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-      }
-
-      .chart-card {
-        border: 1px solid #d9e7f4;
-        border-radius: 14px;
-        padding: 12px;
-        background: #f8fbff;
-      }
-
       .chart-title {
         font-size: 12px;
         font-weight: 700;
@@ -198,6 +195,11 @@
         margin-top: 8px;
         color: #475569;
       }
+
+      .footnote {
+        font-size: 10px;
+        color: #64748b;
+      }
     </style>
   </head>
   <body>
@@ -218,7 +220,7 @@
           <div>{{ version }} / {{ stage }}</div>
         </div>
         <div class="mini">
-          <div class="label" style="color: rgba(255,255,255,0.72)">생성 시각</div>
+          <div class="label" style="color: rgba(255,255,255,0.72)">보고서 생성</div>
           <div>{{ generated_at }}</div>
         </div>
       </div>
@@ -234,7 +236,7 @@
     </section>
 
     <section class="panel">
-      <div class="panel-title">핵심 요약</div>
+      <div class="panel-title">요약</div>
       <ul class="summary-list">
         {% for line in summary_lines %}
         <li>{{ line }}</li>
@@ -245,7 +247,7 @@
     <section class="two-col">
       <div class="panel">
         <div class="panel-title">핵심 성능 지표</div>
-        <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 0">
+        <div class="card-grid" style="grid-template-columns: repeat(2, 1fr)">
           {% for item in metric_highlights %}
           <div class="kpi">
             <div class="label">{{ item.label }}</div>
@@ -266,65 +268,52 @@
 
     <section class="two-col">
       <div class="panel">
-        <div class="panel-title">데이터셋 개요</div>
+        <div class="panel-title">기본 정보</div>
         <table>
           <tbody>
             <tr>
-              <th>데이터셋</th>
-              <td>{{ dataset_name or "-" }}</td>
+              <th>알고리즘</th>
+              <td>{{ algorithm or "-" }}</td>
             </tr>
             <tr>
-              <th>행 / 열</th>
-              <td>{{ dataset_rows }} / {{ dataset_cols }}</td>
+              <th>데이터셋</th>
+              <td>{{ dataset_name or "-" }}</td>
             </tr>
             <tr>
               <th>타깃 컬럼</th>
               <td>{{ target_col or "-" }}</td>
             </tr>
             <tr>
-              <th>타깃 타입</th>
-              <td>{{ target_meta.type or "-" }}</td>
+              <th>행 / 열</th>
+              <td>{{ dataset_rows }} / {{ dataset_cols }}</td>
             </tr>
             <tr>
-              <th>타깃 결측치</th>
-              <td>{{ target_meta.missing }}</td>
+              <th>Run ID</th>
+              <td>{{ run_id or "-" }}</td>
             </tr>
             <tr>
-              <th>타깃 고유값</th>
-              <td>{{ target_meta.unique }}</td>
+              <th>모델 생성</th>
+              <td>{{ created_at }}</td>
             </tr>
           </tbody>
         </table>
-        <div class="section-break"></div>
-        <div class="card-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 0">
-          {% for item in dataset_stats %}
-          <div class="kpi">
-            <div class="label">{{ item.label }}</div>
-            <div class="value">{{ item.value }}</div>
-          </div>
-          {% endfor %}
-        </div>
       </div>
       <div class="panel">
-        <div class="panel-title">컬럼 미리보기</div>
+        <div class="panel-title">타깃 메타</div>
         <table>
-          <thead>
-            <tr>
-              <th>컬럼명</th>
-              <th>타입</th>
-              <th>결측치</th>
-              <th>고유값</th>
-            </tr>
-          </thead>
           <tbody>
-            {% for item in dataset_columns %}
             <tr>
-              <td>{{ item.name }}{% if item.is_target %} <span class="badge ok">target</span>{% endif %}</td>
-              <td>{{ item.type }}</td>
-              <td>{{ item.missing }}</td>
-              <td>{{ item.unique }}</td>
+              <th>타입</th>
+              <td>{{ target_meta.type or "-" }}</td>
             </tr>
-            {% endfor %}
+            <tr>
+              <th>결측치</th>
+              <td>{{ target_meta.missing }}</td>
+            </tr>
+            <tr>
+              <th>고유값 수</th>
+              <td>{{ target_meta.unique }}</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -332,7 +321,7 @@
 
     <section class="two-col">
       <div class="panel">
-        <div class="panel-title">설정 요약</div>
+        <div class="panel-title">Setup 요약</div>
         <table>
           <thead>
             <tr>
@@ -350,18 +339,64 @@
               {% endfor %}
             {% else %}
               <tr>
-                <td colspan="2">저장된 설정 요약이 없습니다.</td>
+                <td colspan="2" class="muted">기록된 setup 요약이 없습니다.</td>
               </tr>
             {% endif %}
           </tbody>
         </table>
       </div>
       <div class="panel">
-        <div class="panel-title">비교 / 튜닝 요약</div>
+        <div class="panel-title">데이터셋 프로필</div>
+        <div class="card-grid" style="grid-template-columns: repeat(2, 1fr)">
+          {% for item in dataset_stats %}
+          <div class="kpi">
+            <div class="label">{{ item.label }}</div>
+            <div class="value">{{ item.value }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">컬럼 미리보기</div>
+      <table>
+        <thead>
+          <tr>
+            <th>컬럼명</th>
+            <th>타입</th>
+            <th>결측치</th>
+            <th>고유값</th>
+            <th>타깃</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if dataset_columns %}
+            {% for column in dataset_columns %}
+            <tr>
+              <td>{{ column.name }}</td>
+              <td>{{ column.type }}</td>
+              <td>{{ column.missing }}</td>
+              <td>{{ column.unique }}</td>
+              <td>{{ "예" if column.is_target else "-" }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="muted">기록된 컬럼 메타데이터가 없습니다.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="two-col">
+      <div class="panel">
+        <div class="panel-title">Compare 요약</div>
         <table>
           <thead>
             <tr>
-              <th>비교 항목</th>
+              <th>항목</th>
               <th>값</th>
             </tr>
           </thead>
@@ -374,11 +409,13 @@
             {% endfor %}
           </tbody>
         </table>
-        <div class="section-break"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Tune 요약</div>
         <table>
           <thead>
             <tr>
-              <th>튜닝 항목</th>
+              <th>항목</th>
               <th>값</th>
             </tr>
           </thead>
@@ -394,59 +431,34 @@
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-title">전체 성능 지표</div>
-      <table>
-        <thead>
-          <tr>
-            <th>항목</th>
-            <th>값</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in metrics %}
-          <tr>
-            <td>{{ item.label }}</td>
-            <td>{{ item.value }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </section>
-
-    {% if report_charts %}
-    <section class="panel">
-      <div class="panel-title">대표 분석 산출물</div>
-      <div class="chart-grid">
-        {% for item in report_charts %}
-        <div class="chart-card">
-          <div class="chart-title">{{ item.title }}</div>
-          <div class="chart-meta">
-            <span class="badge ok">{{ item.family_label }}</span>
-            <span class="badge {% if item.fallback_used %}warn{% else %}ok{% endif %}">
-              {% if item.fallback_used %}앱 fallback{% else %}PyCaret native{% endif %}
-            </span>
-          </div>
-          <img class="chart-image" src="{{ item.image_data_url }}" alt="{{ item.title }}" />
-          {% if item.caption %}
-          <p class="chart-caption">{{ item.caption }}</p>
-          {% endif %}
-          <p class="muted">렌더링 경로: {{ item.native_source }}</p>
-          {% if item.native_reason %}
-          <p class="muted">native 경로: {{ item.native_reason }}</p>
-          {% endif %}
-          {% if item.fallback_used and item.fallback_reason %}
-          <p class="muted">fallback 사유: {{ item.fallback_reason }}</p>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-    </section>
-    {% endif %}
-
     <section class="two-col">
       <div class="panel">
-        <div class="panel-title">하이퍼파라미터 변화</div>
+        <div class="panel-title">전체 성능 지표</div>
+        <table>
+          <thead>
+            <tr>
+              <th>지표</th>
+              <th>값</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if metrics %}
+              {% for item in metrics %}
+              <tr>
+                <td>{{ item.label }}</td>
+                <td>{{ item.value }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="2" class="muted">기록된 지표가 없습니다.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="panel-title">하이퍼파라미터</div>
         <table>
           <thead>
             <tr>
@@ -464,35 +476,64 @@
               {% endfor %}
             {% else %}
               <tr>
-                <td colspan="2">기록된 하이퍼파라미터 차이가 없습니다.</td>
+                <td colspan="2" class="muted">저장된 하이퍼파라미터가 없습니다.</td>
               </tr>
             {% endif %}
           </tbody>
         </table>
       </div>
-      <div class="panel">
-        <div class="panel-title">산출물 현황</div>
-        <table>
-          <thead>
-            <tr>
-              <th>항목</th>
-              <th>경로</th>
-              <th>상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in artifact_rows %}
-            <tr>
-              <td>{{ item.label }}</td>
-              <td class="muted">{{ item.value }}</td>
-              <td>
-                <span class="badge {% if item.status == '확인됨' %}ok{% else %}warn{% endif %}">{{ item.status }}</span>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">대표 차트</div>
+      {% if report_charts %}
+      <div class="chart-grid">
+        {% for chart in report_charts %}
+        <div class="chart-card">
+          <div class="chart-title">{{ chart.title }}</div>
+          <div class="chart-meta">
+            <span class="badge ok">{{ chart.family_label }}</span>
+            <span class="badge {{ 'warn' if chart.fallback_used else 'ok' }}">
+              {{ "Fallback 경로" if chart.fallback_used else "Native 경로" }}
+            </span>
+          </div>
+          <img class="chart-image" src="{{ chart.image_data_url }}" alt="{{ chart.title }}" />
+          <p class="chart-caption">{{ chart.caption or "-" }}</p>
+          <p class="footnote">source: {{ chart.native_source }}</p>
+          {% if chart.fallback_reason %}
+          <p class="footnote">fallback: {{ chart.fallback_reason }}</p>
+          {% endif %}
+          {% if chart.native_reason %}
+          <p class="footnote">native: {{ chart.native_reason }}</p>
+          {% endif %}
+        </div>
+        {% endfor %}
       </div>
+      {% else %}
+      <div class="muted">현재 저장 가능한 대표 차트가 없습니다.</div>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-title">산출물 경로</div>
+      <table>
+        <thead>
+          <tr>
+            <th>항목</th>
+            <th>경로</th>
+            <th>상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in artifact_rows %}
+          <tr>
+            <td>{{ item.label }}</td>
+            <td>{{ item.value }}</td>
+            <td>{{ item.status }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </section>
   </body>
 </html>

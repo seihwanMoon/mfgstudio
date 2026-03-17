@@ -8,6 +8,13 @@ from config import settings
 from models.dataset import Dataset
 from models.experiment import Experiment
 from models.trained_model import TrainedModel
+from services.artifact_cache import (
+    build_cache_signature,
+    cleanup_cache_directory,
+    load_cached_artifact,
+    retention_seconds,
+    store_cached_artifact,
+)
 from services.pycaret_service import EXPERIMENT_CONTEXTS, ensure_experiment_context, get_report_safe_plot
 
 
@@ -42,62 +49,24 @@ METRIC_PRIORITY = {
 
 REPORT_CHART_SPECS = {
     "classification": [
-        {
-            "family": "plot",
-            "key": "feature",
-            "title": "변수 중요도",
-            "caption": "모델 진단 기준의 대표 변수 중요도입니다.",
-        },
-        {
-            "family": "xai",
-            "key": "summary",
-            "title": "SHAP 요약",
-            "caption": "예측에 큰 영향을 준 상위 feature를 요약합니다.",
-        },
+        {"family": "plot", "key": "feature", "title": "변수 중요도", "caption": "모델 진단 기준의 대표 변수 중요도입니다."},
+        {"family": "xai", "key": "summary", "title": "SHAP 요약", "caption": "예측 영향도가 높은 상위 feature 분포를 요약합니다."},
     ],
     "regression": [
-        {
-            "family": "plot",
-            "key": "residuals",
-            "title": "잔차 플롯",
-            "caption": "예측 오차 패턴이 안정적인지 확인합니다.",
-        },
-        {
-            "family": "xai",
-            "key": "summary",
-            "title": "SHAP 요약",
-            "caption": "예측값 변화에 기여한 상위 feature를 요약합니다.",
-        },
+        {"family": "plot", "key": "residuals", "title": "잔차 플롯", "caption": "예측 오차 패턴이 안정적인지 확인합니다."},
+        {"family": "xai", "key": "summary", "title": "SHAP 요약", "caption": "예측값에 기여한 상위 feature를 요약합니다."},
     ],
     "clustering": [
-        {
-            "family": "plot",
-            "key": "cluster",
-            "title": "클러스터 분포",
-            "caption": "클러스터 분리 상태를 2D 투영으로 보여줍니다.",
-        },
+        {"family": "plot", "key": "cluster", "title": "클러스터 분포", "caption": "클러스터 분리 상태를 2D 투영으로 보여줍니다."},
+        {"family": "plot", "key": "elbow", "title": "엘보 차트", "caption": "군집 수 변화에 따른 관성 감소 추세를 확인합니다."},
     ],
     "anomaly": [
-        {
-            "family": "plot",
-            "key": "tsne",
-            "title": "이상치 임베딩",
-            "caption": "정상/이상 패턴의 분포를 임베딩으로 확인합니다.",
-        },
+        {"family": "plot", "key": "tsne", "title": "이상치 임베딩", "caption": "정상과 이상 샘플 분포를 임베딩으로 확인합니다."},
+        {"family": "plot", "key": "score", "title": "이상치 점수 분포", "caption": "Anomaly score 분포와 평균 위치를 함께 확인합니다."},
     ],
     "timeseries": [
-        {
-            "family": "plot",
-            "key": "forecast",
-            "title": "예측 추세",
-            "caption": "학습 구간과 예측 구간을 함께 보여주는 대표 시계열 차트입니다.",
-        },
-        {
-            "family": "plot",
-            "key": "residuals",
-            "title": "잔차 플롯",
-            "caption": "예측 오차를 시간 순서대로 확인하는 대표 진단 차트입니다.",
-        },
+        {"family": "plot", "key": "forecast", "title": "예측 추세", "caption": "학습 구간과 예측 구간을 함께 보여주는 대표 시계열 차트입니다."},
+        {"family": "plot", "key": "residuals", "title": "잔차 플롯", "caption": "예측 오차를 시간 순서대로 확인하는 진단 차트입니다."},
     ],
 }
 
@@ -168,7 +137,7 @@ def _summarize_setup_params(params: dict) -> list[dict]:
         "log_plots": "플롯 기록",
     }
     summary = []
-    for key in (
+    ordered_keys = (
         "target_col",
         "session_id",
         "train_size",
@@ -183,7 +152,8 @@ def _summarize_setup_params(params: dict) -> list[dict]:
         "index_col",
         "log_experiment",
         "log_plots",
-    ):
+    )
+    for key in ordered_keys:
         if key not in params:
             continue
         value = params.get(key)
@@ -213,6 +183,39 @@ def _experiment_metadata_path(experiment_id: int) -> Path:
 
 def _experiment_pickle_path(experiment_id: int) -> Path:
     return Path(settings.experiment_dir) / f"experiment_{experiment_id}" / "pycaret_experiment.pkl"
+
+
+def _report_chart_cache_dir(model: TrainedModel) -> Path:
+    path = Path(settings.report_dir) / "chart_cache" / f"model_{model.id}"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _report_chart_cache_path(model: TrainedModel, spec: dict) -> Path:
+    return _report_chart_cache_dir(model) / f"{spec['family']}_{spec['key']}.png"
+
+
+def _report_chart_metadata_path(model: TrainedModel, spec: dict) -> Path:
+    return _report_chart_cache_dir(model) / f"{spec['family']}_{spec['key']}.json"
+
+
+def _report_chart_cache_signature(model: TrainedModel, spec: dict) -> str:
+    return build_cache_signature(
+        artifact_kind="report_chart",
+        model_id=model.id,
+        model_updated_at=model.updated_at,
+        family=spec["family"],
+        key=spec["key"],
+    )
+
+
+def _cleanup_report_chart_cache(model: TrainedModel, chart_specs: list[dict]) -> None:
+    valid_stems = {f"{spec['family']}_{spec['key']}" for spec in chart_specs}
+    cleanup_cache_directory(
+        _report_chart_cache_dir(model),
+        valid_stems=valid_stems,
+        max_age_seconds=retention_seconds(settings.report_chart_cache_retention_days),
+    )
 
 
 def _load_context_metadata(experiment_id: int) -> dict:
@@ -268,7 +271,7 @@ def _summarize_dataset(dataset: Dataset | None, target_col: str | None) -> dict:
 def _build_workflow_steps(params: dict, model: TrainedModel, context_meta: dict) -> list[str]:
     steps = ["데이터 로드", "PyCaret setup"]
     if params.get("normalize"):
-        steps.append(f"정규화({params.get('normalize_method') or 'auto'})")
+        steps.append(f"정규화 ({params.get('normalize_method') or 'auto'})")
     if params.get("fix_imbalance"):
         steps.append("불균형 보정")
     if params.get("remove_outliers"):
@@ -322,6 +325,7 @@ def _build_artifact_rows(model: TrainedModel, experiment_id: int) -> list[dict]:
     items = [
         ("최종 모델 파일", model.model_path),
         ("보고서 파일", str(report_path)),
+        ("차트 캐시 디렉터리", str(_report_chart_cache_dir(model))),
         ("실험 컨텍스트", str(_experiment_metadata_path(experiment_id))),
         ("PyCaret 실험 피클", str(_experiment_pickle_path(experiment_id))),
     ]
@@ -329,13 +333,7 @@ def _build_artifact_rows(model: TrainedModel, experiment_id: int) -> list[dict]:
     for label, raw_path in items:
         path_text = raw_path or "-"
         exists = Path(raw_path).exists() if raw_path else False
-        rows.append(
-            {
-                "label": label,
-                "value": path_text,
-                "status": "확인됨" if exists else "없음",
-            }
-        )
+        rows.append({"label": label, "value": path_text, "status": "확인됨" if exists else "없음"})
     return rows
 
 
@@ -345,13 +343,13 @@ def _build_summary_lines(model: TrainedModel, experiment: Experiment | None, dat
     candidate_count = len(context_meta.get("run_ids", {})) if isinstance(context_meta, dict) else 0
     lines = [
         f"{_module_label(experiment.module_type if experiment else None)} 실험 `{experiment.name if experiment else '-'}`에서 `{experiment.target_col if experiment else '-'}` 타깃을 위해 생성된 모델입니다.",
-        f"데이터셋은 `{dataset.filename if dataset else '-'}`이며 총 {_format_value(dataset.row_count if dataset else None)}행 / {_format_value(dataset.col_count if dataset else None)}열을 기준으로 학습했습니다.",
-        f"비교 기준은 `{_format_value(compare_options.get('sort'))}`이고 실제 비교 실행 모델 수는 `{candidate_count}`개입니다.",
+        f"데이터셋 `{dataset.filename if dataset else '-'}`를 기준으로 총 {_format_value(dataset.row_count if dataset else None)}행 / {_format_value(dataset.col_count if dataset else None)}열을 학습에 사용했습니다.",
+        f"비교 기준은 `{_format_value(compare_options.get('sort'))}`이며 실제 비교 실행 모델 수는 `{candidate_count}`개입니다.",
     ]
     if model.is_tuned:
         lines.append("튜닝 이력이 있어 tuned estimator 기준 성능과 하이퍼파라미터 변경 사항을 함께 기록합니다.")
     if model.stage == "Production":
-        lines.append("현재 이 모델은 프로덕션 스테이지에 배치되어 있어 운영 지표와 보고서 재생성 대상에 포함됩니다.")
+        lines.append("현재 이 모델은 프로덕션 스테이지에 배치되어 있어 운영 지표와 보고서 상태를 함께 포함합니다.")
     return lines
 
 
@@ -359,12 +357,12 @@ def _report_family_label(family: str) -> str:
     return "XAI" if family == "xai" else "진단 그래프"
 
 
-def _build_report_chart_item(spec: dict, payload: dict) -> dict | None:
+def _build_report_chart_item(spec: dict, payload: dict, image_base64: str | None = None) -> dict | None:
     if not isinstance(payload, dict):
         return None
     if payload.get("render_mode") != "image":
         return None
-    image_base64 = payload.get("base64_image")
+    image_base64 = image_base64 or payload.get("base64_image")
     if not image_base64:
         return None
     return {
@@ -380,6 +378,35 @@ def _build_report_chart_item(spec: dict, payload: dict) -> dict | None:
     }
 
 
+def _load_cached_chart_base64(model: TrainedModel, spec: dict) -> str | None:
+    image_base64, _ = load_cached_artifact(
+        _report_chart_cache_path(model, spec),
+        _report_chart_metadata_path(model, spec),
+        _report_chart_cache_signature(model, spec),
+        purge_invalid=True,
+    )
+    return image_base64
+
+
+def _store_chart_cache(model: TrainedModel, spec: dict, image_base64: str | None, payload: dict | None = None) -> None:
+    if not image_base64:
+        return
+    store_cached_artifact(
+        _report_chart_cache_path(model, spec),
+        _report_chart_metadata_path(model, spec),
+        image_base64,
+        {
+            "signature": _report_chart_cache_signature(model, spec),
+            "artifact_kind": "report_chart",
+            "model_id": model.id,
+            "family": spec["family"],
+            "key": spec["key"],
+            "native_source": payload.get("native_source") if isinstance(payload, dict) else None,
+            "fallback_used": bool(payload.get("fallback_used")) if isinstance(payload, dict) else False,
+        },
+    )
+
+
 def _build_report_charts(model: TrainedModel, experiment: Experiment | None, dataset: Dataset | None) -> list[dict]:
     if not experiment or not dataset or not dataset.stored_path:
         return []
@@ -388,6 +415,7 @@ def _build_report_charts(model: TrainedModel, experiment: Experiment | None, dat
     chart_specs = REPORT_CHART_SPECS.get(module_type, [])
     if not chart_specs:
         return []
+    _cleanup_report_chart_cache(model, chart_specs)
 
     params = _safe_json_loads(experiment.setup_params, {})
     active_context = EXPERIMENT_CONTEXTS.get(experiment.id)
@@ -405,14 +433,27 @@ def _build_report_charts(model: TrainedModel, experiment: Experiment | None, dat
 
     charts: list[dict] = []
     for spec in chart_specs:
-        try:
-            payload = get_report_safe_plot(
-                experiment.id,
-                model.algorithm,
-                spec["key"],
-                family=spec["family"],
+        cached_image = _load_cached_chart_base64(model, spec)
+        if cached_image:
+            charts.append(
+                {
+                    "title": spec["title"],
+                    "caption": spec.get("caption"),
+                    "family": spec["family"],
+                    "family_label": _report_family_label(spec["family"]),
+                    "image_data_url": f"data:image/png;base64,{cached_image}",
+                    "native_source": "report_chart_cache",
+                    "fallback_used": False,
+                    "native_reason": "이전에 생성한 report-safe chart cache를 재사용했습니다.",
+                    "fallback_reason": None,
+                }
             )
-            chart_item = _build_report_chart_item(spec, payload)
+            continue
+        try:
+            payload = get_report_safe_plot(experiment.id, model.algorithm, spec["key"], family=spec["family"])
+            image_base64 = payload.get("base64_image") if isinstance(payload, dict) else None
+            _store_chart_cache(model, spec, image_base64, payload)
+            chart_item = _build_report_chart_item(spec, payload, image_base64)
             if chart_item:
                 charts.append(chart_item)
         except Exception:
@@ -420,11 +461,7 @@ def _build_report_charts(model: TrainedModel, experiment: Experiment | None, dat
     return charts
 
 
-def build_report_context(
-    model: TrainedModel,
-    experiment: Experiment | None = None,
-    dataset: Dataset | None = None,
-) -> dict:
+def build_report_context(model: TrainedModel, experiment: Experiment | None = None, dataset: Dataset | None = None) -> dict:
     metrics = _safe_json_loads(model.metrics, {})
     hyperparams = _safe_json_loads(model.hyperparams, {})
     context_meta = _load_context_metadata(model.experiment_id)

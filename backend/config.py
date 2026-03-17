@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     model_dir: str = "./data/models"
     experiment_dir: str = "./data/experiments"
     report_dir: str = "./data/reports"
+    report_chart_cache_retention_days: int = 30
+    xai_snapshot_cache_retention_days: int = 14
     drift_warning_threshold: float = 0.2
     drift_danger_threshold: float = 0.4
     secret_key: str = "dev-secret-key"

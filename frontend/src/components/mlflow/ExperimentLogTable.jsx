@@ -110,7 +110,7 @@ export default function ExperimentLogTable({
           <span>주요 지표</span>
         </div>
         {!runs.length ? (
-          <div style={{ padding: 16, color: "var(--text-secondary)" }}>선택한 실험에 표시할 run 이력이 없습니다.</div>
+          <div style={{ padding: 16, color: "var(--text-secondary)" }}>선택한 실험의 표시 가능한 run 이력이 없습니다.</div>
         ) : null}
         {runs.map((row) => (
           <div

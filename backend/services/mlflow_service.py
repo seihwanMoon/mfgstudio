@@ -51,6 +51,16 @@ def get_client() -> MlflowClient:
     return MlflowClient()
 
 
+def _get_read_client() -> MlflowClient | None:
+    reachable, _ = _tracking_server_healthcheck()
+    if not reachable:
+        return None
+    try:
+        return get_client()
+    except Exception:
+        return None
+
+
 def close_active_runs(status: str = "FINISHED", limit: int = 10) -> list[str]:
     reachable, _ = _tracking_server_healthcheck()
     if not reachable:
@@ -157,8 +167,10 @@ def get_mlflow_status() -> dict:
 
 
 def get_all_registered_models() -> list[dict]:
+    client = _get_read_client()
+    if client is None:
+        return []
     try:
-        client = get_client()
         models = []
         for registered in client.search_registered_models():
             versions = client.search_model_versions(f"name='{registered.name}'")
@@ -175,7 +187,10 @@ def get_all_registered_models() -> list[dict]:
                     "production_version": int(production.version) if production else None,
                 }
             )
-        return sorted(models, key=lambda item: (-(item["latest_versions"][0] or 0), item["name"]))
+        return sorted(
+            models,
+            key=lambda item: (-(item["latest_versions"][0] if item["latest_versions"] else 0), item["name"]),
+        )
     except Exception:
         return []
 
@@ -205,62 +220,72 @@ def _dedupe_runs_by_name(runs) -> list:
 
 
 def list_experiments() -> list[dict]:
-    client = get_client()
-    experiments = client.search_experiments()
-    payload = []
-    for experiment in experiments:
-        raw_runs = client.search_runs(
-            experiment_ids=[experiment.experiment_id],
-            max_results=100,
-            order_by=["attribute.start_time DESC"],
-        )
-        runs = _dedupe_runs_by_name([run for run in raw_runs if _is_user_visible_run(run)])
-        latest_run = runs[0] if runs else None
-        payload.append(
-            {
-                "experiment_id": experiment.experiment_id,
-                "name": experiment.name,
-                "lifecycle_stage": experiment.lifecycle_stage,
-                "run_count": len(runs),
-                "last_update_time": _ts_to_iso(getattr(experiment, "last_update_time", None)),
-                "latest_run_id": latest_run.info.run_id if latest_run else None,
-                "latest_run_name": latest_run.data.tags.get("mlflow.runName") if latest_run else None,
-                "latest_run_status": latest_run.info.status if latest_run else None,
-                "latest_start_time": _ts_to_iso(latest_run.info.start_time) if latest_run else None,
-                "latest_metrics": (
-                    {key: round(float(value), 4) for key, value in latest_run.data.metrics.items()}
-                    if latest_run
-                    else {}
-                ),
-            }
-        )
-    return sorted(payload, key=lambda item: ((item["latest_start_time"] or ""), item["name"]), reverse=True)
+    client = _get_read_client()
+    if client is None:
+        return []
+    try:
+        experiments = client.search_experiments()
+        payload = []
+        for experiment in experiments:
+            raw_runs = client.search_runs(
+                experiment_ids=[experiment.experiment_id],
+                max_results=100,
+                order_by=["attribute.start_time DESC"],
+            )
+            runs = _dedupe_runs_by_name([run for run in raw_runs if _is_user_visible_run(run)])
+            latest_run = runs[0] if runs else None
+            payload.append(
+                {
+                    "experiment_id": experiment.experiment_id,
+                    "name": experiment.name,
+                    "lifecycle_stage": experiment.lifecycle_stage,
+                    "run_count": len(runs),
+                    "last_update_time": _ts_to_iso(getattr(experiment, "last_update_time", None)),
+                    "latest_run_id": latest_run.info.run_id if latest_run else None,
+                    "latest_run_name": latest_run.data.tags.get("mlflow.runName") if latest_run else None,
+                    "latest_run_status": latest_run.info.status if latest_run else None,
+                    "latest_start_time": _ts_to_iso(latest_run.info.start_time) if latest_run else None,
+                    "latest_metrics": (
+                        {key: round(float(value), 4) for key, value in latest_run.data.metrics.items()}
+                        if latest_run
+                        else {}
+                    ),
+                }
+            )
+        return sorted(payload, key=lambda item: ((item["latest_start_time"] or ""), item["name"]), reverse=True)
+    except Exception:
+        return []
 
 
 def list_experiment_runs(experiment_id: str, max_results: int = 20) -> list[dict]:
-    client = get_client()
-    raw_runs = client.search_runs(
-        experiment_ids=[experiment_id],
-        max_results=max_results * 10,
-        order_by=["attribute.start_time DESC"],
-    )
-    runs = _dedupe_runs_by_name([run for run in raw_runs if _is_user_visible_run(run)])[:max_results]
-    payload = []
-    for run in runs:
-        metrics = {key: round(float(value), 4) for key, value in run.data.metrics.items()}
-        payload.append(
-            {
-                "run_id": run.info.run_id,
-                "run_name": run.data.tags.get("mlflow.runName") or run.info.run_id[:8],
-                "status": run.info.status,
-                "start_time": _ts_to_iso(run.info.start_time),
-                "end_time": _ts_to_iso(run.info.end_time),
-                "metrics": metrics,
-                "params": dict(run.data.params),
-                "tags": dict(run.data.tags),
-            }
+    client = _get_read_client()
+    if client is None:
+        return []
+    try:
+        raw_runs = client.search_runs(
+            experiment_ids=[experiment_id],
+            max_results=max_results * 10,
+            order_by=["attribute.start_time DESC"],
         )
-    return payload
+        runs = _dedupe_runs_by_name([run for run in raw_runs if _is_user_visible_run(run)])[:max_results]
+        payload = []
+        for run in runs:
+            metrics = {key: round(float(value), 4) for key, value in run.data.metrics.items()}
+            payload.append(
+                {
+                    "run_id": run.info.run_id,
+                    "run_name": run.data.tags.get("mlflow.runName") or run.info.run_id[:8],
+                    "status": run.info.status,
+                    "start_time": _ts_to_iso(run.info.start_time),
+                    "end_time": _ts_to_iso(run.info.end_time),
+                    "metrics": metrics,
+                    "params": dict(run.data.params),
+                    "tags": dict(run.data.tags),
+                }
+            )
+        return payload
+    except Exception:
+        return []
 
 
 def _jsonable_params(params: dict[str, Any] | None) -> dict[str, Any]:

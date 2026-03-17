@@ -3,7 +3,7 @@ import { useMemo, useState } from "react"
 import { reportAPI } from "../../api"
 import { formatDateTimeKST } from "../../utils/formatters"
 
-function SummaryCard({ label, value }) {
+function SummaryCard({ label, value, description }) {
   return (
     <div
       style={{
@@ -11,10 +11,13 @@ function SummaryCard({ label, value }) {
         borderRadius: 14,
         background: "var(--bg-surface-soft)",
         padding: 14,
+        display: "grid",
+        gap: 6,
       }}
     >
-      <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 6 }}>{label}</div>
+      <div style={{ color: "var(--text-muted)", fontSize: 11 }}>{label}</div>
       <div style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 20 }}>{value}</div>
+      {description ? <div style={{ color: "var(--text-muted)", fontSize: 12 }}>{description}</div> : null}
     </div>
   )
 }
@@ -55,11 +58,12 @@ function ActionButton({ children, onClick, disabled = false, tone = "default", a
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    pointerEvents: disabled ? "none" : "auto",
   }
 
   if (as === "a") {
     return (
-      <a href={href} target="_blank" rel="noreferrer" style={style}>
+      <a href={href} target="_blank" rel="noreferrer" style={style} aria-disabled={disabled}>
         {children}
       </a>
     )
@@ -104,7 +108,7 @@ function FilterBar({ title, description, search, onSearch, filter, onFilter, fil
         <input
           value={search}
           onChange={(event) => onSearch(event.target.value)}
-          placeholder="이름, 실험명, 데이터셋, 타깃으로 검색"
+          placeholder="모델명, 실험명, 데이터셋, 타깃으로 검색"
           style={{
             borderRadius: 10,
             border: "1px solid var(--border)",
@@ -136,6 +140,19 @@ function FilterBar({ title, description, search, onSearch, filter, onFilter, fil
   )
 }
 
+function formatMaybeDate(value) {
+  return value ? formatDateTimeKST(value) : "-"
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0)
+  if (!bytes) return "0 B"
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
 function matchesExperimentFilter(item, filter) {
   if (filter === "all") return true
   if (filter === "archived") return item.status === "archived"
@@ -157,13 +174,85 @@ function matchesReportFilter(item, filter) {
   return true
 }
 
-function formatMaybeDate(value) {
-  return value ? formatDateTimeKST(value) : "-"
+function CacheCard({ title, description, stats, retentionDays }) {
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 14,
+        background: "var(--bg-surface-soft)",
+        padding: 14,
+        display: "grid",
+        gap: 8,
+      }}
+    >
+      <div>
+        <div style={{ color: "var(--text-primary)", fontWeight: 700, marginBottom: 4 }}>{title}</div>
+        <div style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>{description}</div>
+      </div>
+      <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.7 }}>
+        <div>보존 정책: {retentionDays > 0 ? `${retentionDays}일` : "자동 만료 없음"}</div>
+        <div>캐시 쌍: {stats?.pair_count ?? 0}</div>
+        <div>파일 수: {stats?.file_count ?? 0}</div>
+        <div>폴더 수: {stats?.directory_count ?? 0}</div>
+        <div>용량: {formatBytes(stats?.size_bytes)}</div>
+        <div>최근 갱신: {formatMaybeDate(stats?.latest_updated_at)}</div>
+      </div>
+      <div style={{ color: "var(--text-muted)", fontSize: 11, wordBreak: "break-all" }}>{stats?.path || "-"}</div>
+    </div>
+  )
+}
+
+function CacheStatusSection({ cacheStatus, onRefreshCacheStatus, onCleanupCache }) {
+  const policy = cacheStatus?.policy || {}
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: 18,
+        background: "var(--bg-surface)",
+        boxShadow: "var(--shadow-panel)",
+        padding: 16,
+        display: "grid",
+        gap: 12,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <div>
+          <div style={{ color: "var(--text-primary)", fontWeight: 800, marginBottom: 6 }}>아티팩트 캐시</div>
+          <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
+            보고서용 차트 캐시와 XAI 스냅샷 캐시의 현재 보존 정책과 저장량입니다.
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <ActionButton onClick={onCleanupCache} tone="warning">
+            정리 실행
+          </ActionButton>
+          <ActionButton onClick={onRefreshCacheStatus}>새로고침</ActionButton>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+        <CacheCard
+          title="보고서 차트 캐시"
+          description="모델별 report-safe 차트를 재생성하지 않고 재사용합니다."
+          stats={cacheStatus?.report_chart_cache}
+          retentionDays={policy.report_chart_cache_retention_days ?? 0}
+        />
+        <CacheCard
+          title="XAI 스냅샷 캐시"
+          description="동일 모델/행/모드의 XAI summary, dependence, PFI 스냅샷을 재사용합니다."
+          stats={cacheStatus?.xai_snapshot_cache}
+          retentionDays={policy.xai_snapshot_cache_retention_days ?? 0}
+        />
+      </div>
+    </div>
+  )
 }
 
 export default function OperationsPanel({
   experiments = [],
   reports = [],
+  cacheStatus = null,
   message = "",
   onArchiveExperiment,
   onArchiveExperiments,
@@ -172,6 +261,8 @@ export default function OperationsPanel({
   onRegenerateReport,
   onRegenerateReports,
   onDeleteReport,
+  onRefreshCacheStatus,
+  onCleanupCache,
 }) {
   const [experimentSearch, setExperimentSearch] = useState("")
   const [experimentFilter, setExperimentFilter] = useState("all")
@@ -219,15 +310,17 @@ export default function OperationsPanel({
   const deletableCount = experiments.filter((item) => item.can_delete).length
   const existingReports = reports.filter((item) => item.report_exists).length
   const fallbackCount = reports.filter((item) => item.mlflow_synced === false).length
+  const cachedArtifacts = (cacheStatus?.report_chart_cache?.pair_count || 0) + (cacheStatus?.xai_snapshot_cache?.pair_count || 0)
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 12 }}>
         <SummaryCard label="관리 대상 실험" value={experiments.length} />
         <SummaryCard label="즉시 삭제 가능" value={deletableCount} />
         <SummaryCard label="보관된 실험" value={archivedCount} />
         <SummaryCard label="생성된 보고서" value={existingReports} />
-        <SummaryCard label="MLflow fallback" value={fallbackCount} />
+        <SummaryCard label="MLflow fallback" value={fallbackCount} description="앱 메타데이터 기준 운영 중" />
+        <SummaryCard label="캐시 아티팩트" value={cachedArtifacts} description="보고서/XAI 재사용 스냅샷" />
       </div>
 
       {message ? (
@@ -245,6 +338,12 @@ export default function OperationsPanel({
           {message}
         </div>
       ) : null}
+
+      <CacheStatusSection
+        cacheStatus={cacheStatus}
+        onRefreshCacheStatus={onRefreshCacheStatus}
+        onCleanupCache={onCleanupCache}
+      />
 
       <div
         style={{
@@ -339,7 +438,7 @@ export default function OperationsPanel({
       >
         <FilterBar
           title="보고서 / 운영 모델 관리"
-          description="보고서를 다시 열고, 재생성하거나, PDF만 삭제할 수 있습니다. 은퇴 정리는 미리보기 후 실행되며 스테이지를 먼저 내리고 예측 이력이 없으면 모델 파일과 등록 버전까지 함께 정리합니다."
+          description="보고서를 다시 만들고, 재열고, PDF만 삭제할 수 있습니다. 은퇴 정리는 미리보기 후 실행되며 스테이지를 먼저 내리고 예측 이력이 없으면 모델 파일과 등록 버전까지 함께 정리합니다."
           search={reportSearch}
           onSearch={setReportSearch}
           filter={reportFilter}
@@ -398,12 +497,12 @@ export default function OperationsPanel({
                   {item.report_path}
                 </div>
                 {item.mlflow_synced === false ? (
-                  <Note tone="warning">MLflow 서버 동기화 없이 앱 기준 메타데이터로 유지 중입니다.</Note>
+                  <Note tone="warning">MLflow 서버 동기화 없이 앱 기준 메타데이터로 운영 중입니다.</Note>
                 ) : null}
                 {item.can_cleanup_artifacts ? (
                   <Note>예측 이력이 없어 은퇴 정리 시 버전과 모델 파일까지 함께 정리할 수 있습니다.</Note>
                 ) : (
-                  <Note tone="warning">예측 이력이 있어 은퇴 정리 시 스테이지와 보고서만 정리하고 버전/모델 파일은 유지됩니다.</Note>
+                  <Note tone="warning">예측 이력이 있어 은퇴 정리는 스테이지와 보고서만 정리하고 버전/모델 파일은 유지합니다.</Note>
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
