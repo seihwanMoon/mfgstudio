@@ -35,6 +35,26 @@ function buildRetirePreviewMessage(item, preview) {
   )
 }
 
+function buildCleanupDeleteMessage(item, preview) {
+  const actions = preview.actions?.length
+    ? preview.actions.map((value, index) => `${index + 1}. ${value}`).join("\n")
+    : "예정된 정리 작업이 없습니다."
+  const blockers = preview.delete_blockers_before?.length
+    ? `\n\n현재 삭제 제한:\n- ${preview.delete_blockers_before.join("\n- ")}`
+    : ""
+
+  return (
+    `'${item.name}' 실험 정리 후 삭제\n\n` +
+    `연결 자산까지 함께 삭제합니다.\n` +
+    `- 모델 ${preview.model_count || 0}개\n` +
+    `- 예측 이력 ${preview.prediction_count || 0}건\n` +
+    `- 리포트 ${preview.report_count || 0}개\n\n` +
+    `예정 작업:\n${actions}` +
+    blockers +
+    "\n\n이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?"
+  )
+}
+
 export default function MLflowPage() {
   const [status, setStatus] = useState(null)
   const [models, setModels] = useState([])
@@ -44,6 +64,7 @@ export default function MLflowPage() {
   const [jobs, setJobs] = useState([])
   const [managedExperiments, setManagedExperiments] = useState([])
   const [managedReports, setManagedReports] = useState([])
+  const [mlflowOrphans, setMlflowOrphans] = useState({ experiments: [], registered_models: [], counts: {} })
   const [cacheStatus, setCacheStatus] = useState(null)
   const [tab, setTab] = useState("logs")
   const [loadingExperiments, setLoadingExperiments] = useState(true)
@@ -102,14 +123,16 @@ export default function MLflowPage() {
   }
 
   async function refreshOperations() {
-    const [experimentResponse, reportResponse, cacheResponse] = await Promise.all([
+    const [experimentResponse, reportResponse, cacheResponse, mlflowOrphanResponse] = await Promise.all([
       opsAPI.experiments().catch(() => ({ experiments: [] })),
       opsAPI.reports().catch(() => ({ reports: [] })),
       opsAPI.cacheStatus().catch(() => null),
+      opsAPI.mlflowOrphans().catch(() => ({ experiments: [], registered_models: [], counts: {} })),
     ])
     setManagedExperiments(experimentResponse.experiments || [])
     setManagedReports(reportResponse.reports || [])
     setCacheStatus(cacheResponse)
+    setMlflowOrphans(mlflowOrphanResponse || { experiments: [], registered_models: [], counts: {} })
   }
 
   async function handleToggle(job) {
@@ -150,6 +173,19 @@ export default function MLflowPage() {
     if (!confirmed) return
     await opsAPI.deleteExperiment(item.experiment_id)
     setOpsMessage(`실험 '${item.name}'을 삭제했습니다.`)
+    await Promise.all([refreshOperations(), refreshMlflowExperiments(), refreshRegistry()])
+  }
+
+  async function handleCleanupDeleteExperiment(item) {
+    const preview = await opsAPI.cleanupDeletePreview(item.experiment_id)
+    const confirmed = window.confirm(buildCleanupDeleteMessage(item, preview))
+    if (!confirmed) return
+
+    const response = await opsAPI.cleanupDeleteExperiment(item.experiment_id)
+    const actions = response.actions?.length ? response.actions.join(", ") : "정리 작업 없음"
+    const skipped = response.skipped?.length ? ` / 예외: ${response.skipped.join(", ")}` : ""
+    const sync = response.mlflow_synced === false ? " / MLflow는 일부 수동 정리가 필요합니다." : ""
+    setOpsMessage(`실험 '${item.name}' 정리 후 삭제 완료: ${actions}${skipped}${sync}`)
     await Promise.all([refreshOperations(), refreshMlflowExperiments(), refreshRegistry()])
   }
 
@@ -206,6 +242,22 @@ export default function MLflowPage() {
     const xaiPairs = response?.cleanup?.xai_snapshot_cache?.removed_pairs || 0
     setOpsMessage(`캐시 정리 완료: report ${reportPairs}쌍, XAI ${xaiPairs}쌍 정리`)
     setCacheStatus(response)
+  }
+
+  async function handleDeleteMlflowExperiment(item) {
+    const confirmed = window.confirm(`MLflow 실험 '${item.name}' (${item.experiment_id})를 삭제하시겠습니까?\n앱과 연결되지 않은 MLflow 자산만 정리하는 용도입니다.`)
+    if (!confirmed) return
+    await opsAPI.deleteMlflowExperiment(item.experiment_id)
+    setOpsMessage(`MLflow 고아 실험 '${item.name}'을 삭제했습니다.`)
+    await Promise.all([refreshOperations(), refreshMlflowExperiments()])
+  }
+
+  async function handleDeleteMlflowModel(item) {
+    const confirmed = window.confirm(`MLflow 등록 모델 '${item.name}'을 삭제하시겠습니까?\n남아 있는 모든 등록 버전이 함께 제거됩니다.`)
+    if (!confirmed) return
+    await opsAPI.deleteMlflowModel(item.name)
+    setOpsMessage(`MLflow 고아 등록 모델 '${item.name}'을 삭제했습니다.`)
+    await Promise.all([refreshOperations(), refreshRegistry()])
   }
 
   return (
@@ -269,17 +321,21 @@ export default function MLflowPage() {
           <OperationsPanel
             experiments={managedExperiments}
             reports={managedReports}
+            mlflowOrphans={mlflowOrphans}
             cacheStatus={cacheStatus}
             message={opsMessage}
             onArchiveExperiment={handleArchiveExperiment}
             onArchiveExperiments={handleArchiveExperiments}
             onDeleteExperiment={handleDeleteExperiment}
+            onCleanupDeleteExperiment={handleCleanupDeleteExperiment}
             onRetireModel={handleRetireModel}
             onRegenerateReport={handleRegenerateReport}
             onRegenerateReports={handleRegenerateReports}
             onDeleteReport={handleDeleteReport}
             onRefreshCacheStatus={refreshOperations}
             onCleanupCache={handleCleanupCache}
+            onDeleteMlflowExperiment={handleDeleteMlflowExperiment}
+            onDeleteMlflowModel={handleDeleteMlflowModel}
           />
         ) : null}
       </div>

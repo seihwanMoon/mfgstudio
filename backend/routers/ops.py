@@ -14,7 +14,14 @@ from models.experiment import Experiment
 from models.prediction import Prediction
 from models.trained_model import TrainedModel
 from services.artifact_cache import cleanup_cache_tree, retention_seconds, summarize_cache_directory
-from services.mlflow_service import delete_model_version, transition_model_stage
+from services.mlflow_service import (
+    delete_mlflow_experiment,
+    delete_model_version,
+    delete_registered_model_name,
+    list_experiment_refs,
+    list_registered_model_refs,
+    transition_model_stage,
+)
 from services.pycaret_service import EXPERIMENT_CONTEXTS
 from services.report_service import resolve_report_path
 
@@ -23,6 +30,16 @@ router = APIRouter()
 
 def _experiment_dir(experiment_id: int) -> Path:
     return Path(settings.experiment_dir) / f"experiment_{experiment_id}"
+
+
+def _report_chart_cache_dir(model_id: int) -> Path:
+    return Path(settings.report_dir) / "chart_cache" / f"model_{model_id}"
+
+
+def _xai_snapshot_cache_dir(experiment_id: int, algorithm: str) -> Path:
+    slug = "".join(char.lower() if char.isalnum() else "_" for char in str(algorithm))
+    normalized = "_".join(part for part in slug.split("_") if part) or "model"
+    return Path(settings.report_dir) / "xai_cache" / f"experiment_{experiment_id}" / normalized
 
 
 def _cache_status_payload() -> dict:
@@ -37,6 +54,50 @@ def _cache_status_payload() -> dict:
         },
         "report_chart_cache": summarize_cache_directory(report_chart_root, recursive=True),
         "xai_snapshot_cache": summarize_cache_directory(xai_snapshot_root, recursive=True),
+    }
+
+
+def _linked_mlflow_references(db: Session) -> dict[str, set[str]]:
+    experiments = db.query(Experiment).all()
+    models = db.query(TrainedModel).all()
+    return {
+        "experiment_ids": {str(row.mlflow_exp_id) for row in experiments if row.mlflow_exp_id},
+        "experiment_names": {str(row.mlflow_exp_name or row.name) for row in experiments if row.mlflow_exp_name or row.name},
+        "model_names": {str(row.mlflow_model_name) for row in models if row.mlflow_model_name},
+        "run_ids": {
+            str(row.mlflow_run_id)
+            for row in models
+            if row.mlflow_run_id and not str(row.mlflow_run_id).startswith("local-")
+        },
+    }
+
+
+def _list_mlflow_orphans(db: Session) -> dict:
+    refs = _linked_mlflow_references(db)
+    orphan_experiments = []
+    for experiment in list_experiment_refs():
+        experiment_id = str(experiment.get("experiment_id"))
+        experiment_name = str(experiment.get("name") or "")
+        if experiment_name == "Default":
+            continue
+        if experiment_id in refs["experiment_ids"] or experiment_name in refs["experiment_names"]:
+            continue
+        orphan_experiments.append(experiment)
+
+    orphan_models = []
+    for model in list_registered_model_refs():
+        model_name = str(model.get("name") or "")
+        if model_name in refs["model_names"]:
+            continue
+        orphan_models.append(model)
+
+    return {
+        "experiments": orphan_experiments,
+        "registered_models": orphan_models,
+        "counts": {
+            "experiments": len(orphan_experiments),
+            "registered_models": len(orphan_models),
+        },
     }
 
 
@@ -216,6 +277,47 @@ def _retirement_preview(model: TrainedModel, db: Session) -> dict:
     }
 
 
+def _experiment_cleanup_delete_preview(experiment: Experiment, models: list[TrainedModel], db: Session) -> dict:
+    prediction_counts = _prediction_counts(db)
+    prediction_total = sum(prediction_counts.get(model.id, 0) for model in models)
+    report_count = sum(1 for model in models if resolve_report_path(model).exists())
+    report_chart_cache_count = sum(1 for model in models if _report_chart_cache_dir(model.id).exists())
+    xai_cache_count = sum(1 for model in models if _xai_snapshot_cache_dir(experiment.id, model.algorithm).exists())
+    version_count = sum(1 for model in models if model.mlflow_version is not None)
+    artifact_count = sum(1 for model in models if model.model_path)
+    stage_count = sum(1 for model in models if (model.stage or "") != "Archived")
+    blockers = _experiment_delete_blockers(models, prediction_total)
+
+    actions: list[str] = []
+    if stage_count:
+        actions.append(f"연결된 모델 스테이지 {stage_count}개를 Archived로 변경")
+    if report_count:
+        actions.append(f"PDF 리포트 {report_count}개 삭제")
+    if report_chart_cache_count:
+        actions.append(f"보고서 차트 캐시 {report_chart_cache_count}개 정리")
+    if xai_cache_count:
+        actions.append(f"XAI 스냅샷 캐시 {xai_cache_count}개 정리")
+    if version_count:
+        actions.append(f"MLflow 등록 버전 {version_count}개 해제")
+    if artifact_count:
+        actions.append(f"최종 모델 파일 {artifact_count}개 삭제")
+    if prediction_total:
+        actions.append(f"예측 이력 {prediction_total}건 삭제")
+    actions.append(f"학습 모델 {len(models)}개와 실험 메타데이터 삭제")
+
+    return {
+        "experiment_id": experiment.id,
+        "experiment_name": experiment.name,
+        "model_count": len(models),
+        "prediction_count": prediction_total,
+        "report_count": report_count,
+        "version_count": version_count,
+        "artifact_count": artifact_count,
+        "delete_blockers_before": blockers,
+        "actions": actions,
+    }
+
+
 @router.get("/experiments")
 def list_managed_experiments(db: Session = Depends(get_db)):
     datasets = {row.id: row for row in db.query(Dataset).all()}
@@ -297,6 +399,124 @@ def delete_experiment(experiment_id: int, db: Session = Depends(get_db)):
     EXPERIMENT_CONTEXTS.pop(experiment_id, None)
 
     return {"experiment_id": experiment_id, "deleted": True}
+
+
+@router.get("/experiments/{experiment_id}/cleanup-delete-preview")
+def cleanup_delete_experiment_preview(experiment_id: int, db: Session = Depends(get_db)):
+    experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    models = db.query(TrainedModel).filter(TrainedModel.experiment_id == experiment_id).all()
+    return _experiment_cleanup_delete_preview(experiment, models, db)
+
+
+@router.post("/experiments/{experiment_id}/cleanup-delete")
+def cleanup_delete_experiment(experiment_id: int, db: Session = Depends(get_db)):
+    experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    models = db.query(TrainedModel).filter(TrainedModel.experiment_id == experiment_id).all()
+    preview = _experiment_cleanup_delete_preview(experiment, models, db)
+    model_ids = [model.id for model in models]
+    actions: list[str] = []
+    skipped: list[str] = []
+    mlflow_synced = True
+
+    for model in models:
+        if (model.stage or "") != "Archived" and model.mlflow_version is not None and model.mlflow_model_name:
+            try:
+                transition_model_stage(model.mlflow_model_name, int(model.mlflow_version), "Archived")
+            except Exception as exc:
+                skipped.append(f"{model.algorithm}: MLflow 스테이지 변경 실패 ({exc})")
+                mlflow_synced = False
+
+        report_path = resolve_report_path(model)
+        if report_path.exists():
+            report_path.unlink()
+
+        chart_cache_dir = _report_chart_cache_dir(model.id)
+        if chart_cache_dir.exists():
+            shutil.rmtree(chart_cache_dir, ignore_errors=True)
+
+        xai_cache_dir = _xai_snapshot_cache_dir(experiment.id, model.algorithm)
+        if xai_cache_dir.exists():
+            shutil.rmtree(xai_cache_dir, ignore_errors=True)
+
+        if model.mlflow_version is not None and model.mlflow_model_name:
+            try:
+                delete_model_version(model.mlflow_model_name, int(model.mlflow_version))
+            except Exception as exc:
+                skipped.append(f"{model.algorithm}: MLflow 등록 버전 해제 실패 ({exc})")
+                mlflow_synced = False
+
+        if model.model_path:
+            model_file = Path(model.model_path)
+            if model_file.exists():
+                model_file.unlink()
+            _remove_model_from_context_metadata(model.experiment_id, model.algorithm)
+
+    if model_ids:
+        deleted_predictions = (
+            db.query(Prediction)
+            .filter(Prediction.model_id.in_(model_ids))
+            .delete(synchronize_session=False)
+        )
+    else:
+        deleted_predictions = 0
+
+    db.query(TrainedModel).filter(TrainedModel.experiment_id == experiment_id).delete(synchronize_session=False)
+    db.delete(experiment)
+    db.commit()
+
+    experiment_dir = _experiment_dir(experiment_id)
+    if experiment_dir.exists():
+        shutil.rmtree(experiment_dir, ignore_errors=True)
+
+    xai_root = Path(settings.report_dir) / "xai_cache" / f"experiment_{experiment_id}"
+    if xai_root.exists():
+        shutil.rmtree(xai_root, ignore_errors=True)
+
+    EXPERIMENT_CONTEXTS.pop(experiment_id, None)
+
+    if experiment.mlflow_exp_id:
+        try:
+            delete_mlflow_experiment(str(experiment.mlflow_exp_id))
+        except Exception as exc:
+            skipped.append(f"MLflow experiment 삭제 실패 ({exc})")
+            mlflow_synced = False
+
+    actions.extend(preview["actions"])
+    return {
+        "experiment_id": experiment_id,
+        "experiment_name": preview["experiment_name"],
+        "deleted": True,
+        "deleted_predictions": int(deleted_predictions),
+        "mlflow_synced": mlflow_synced,
+        "actions": actions,
+        "skipped": skipped,
+    }
+
+
+@router.get("/mlflow-orphans")
+def list_mlflow_orphans(db: Session = Depends(get_db)):
+    return _list_mlflow_orphans(db)
+
+
+@router.delete("/mlflow-experiments/{mlflow_experiment_id}")
+def delete_orphan_mlflow_experiment(mlflow_experiment_id: str):
+    try:
+        return delete_mlflow_experiment(mlflow_experiment_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"MLflow experiment 삭제 실패: {exc}") from exc
+
+
+@router.delete("/mlflow-models/{model_name}")
+def delete_orphan_mlflow_model(model_name: str):
+    try:
+        return delete_registered_model_name(model_name)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"MLflow 모델 삭제 실패: {exc}") from exc
 
 
 @router.get("/reports")

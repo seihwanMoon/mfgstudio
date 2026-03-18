@@ -252,17 +252,21 @@ function CacheStatusSection({ cacheStatus, onRefreshCacheStatus, onCleanupCache 
 export default function OperationsPanel({
   experiments = [],
   reports = [],
+  mlflowOrphans = { experiments: [], registered_models: [], counts: {} },
   cacheStatus = null,
   message = "",
   onArchiveExperiment,
   onArchiveExperiments,
   onDeleteExperiment,
+  onCleanupDeleteExperiment,
   onRetireModel,
   onRegenerateReport,
   onRegenerateReports,
   onDeleteReport,
   onRefreshCacheStatus,
   onCleanupCache,
+  onDeleteMlflowExperiment,
+  onDeleteMlflowModel,
 }) {
   const [experimentSearch, setExperimentSearch] = useState("")
   const [experimentFilter, setExperimentFilter] = useState("all")
@@ -311,16 +315,18 @@ export default function OperationsPanel({
   const existingReports = reports.filter((item) => item.report_exists).length
   const fallbackCount = reports.filter((item) => item.mlflow_synced === false).length
   const cachedArtifacts = (cacheStatus?.report_chart_cache?.pair_count || 0) + (cacheStatus?.xai_snapshot_cache?.pair_count || 0)
+  const orphanMlflowAssets = (mlflowOrphans?.counts?.experiments || 0) + (mlflowOrphans?.counts?.registered_models || 0)
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 12 }}>
         <SummaryCard label="관리 대상 실험" value={experiments.length} />
         <SummaryCard label="즉시 삭제 가능" value={deletableCount} />
         <SummaryCard label="보관된 실험" value={archivedCount} />
         <SummaryCard label="생성된 보고서" value={existingReports} />
         <SummaryCard label="MLflow fallback" value={fallbackCount} description="앱 메타데이터 기준 운영 중" />
         <SummaryCard label="캐시 아티팩트" value={cachedArtifacts} description="보고서/XAI 재사용 스냅샷" />
+        <SummaryCard label="MLflow 고아 자산" value={orphanMlflowAssets} description="앱과 연결되지 않은 실험/모델" />
       </div>
 
       {message ? (
@@ -418,6 +424,11 @@ export default function OperationsPanel({
                 <ActionButton onClick={() => onArchiveExperiment?.(item)} disabled={item.status === "archived"}>
                   보관
                 </ActionButton>
+                {!item.can_delete ? (
+                  <ActionButton onClick={() => onCleanupDeleteExperiment?.(item)} tone="warning">
+                    정리 후 삭제
+                  </ActionButton>
+                ) : null}
                 <ActionButton onClick={() => onDeleteExperiment?.(item)} disabled={!item.can_delete} tone="danger">
                   삭제
                 </ActionButton>
@@ -521,6 +532,103 @@ export default function OperationsPanel({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div
+        style={{
+          border: "1px solid var(--border)",
+          borderRadius: 18,
+          background: "var(--bg-surface)",
+          boxShadow: "var(--shadow-panel)",
+          padding: 16,
+          display: "grid",
+          gap: 12,
+        }}
+      >
+        <div>
+          <div style={{ color: "var(--text-primary)", fontWeight: 800, marginBottom: 6 }}>MLflow 고아 자산 정리</div>
+          <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>
+            앱 DB와 연결이 끊긴 MLflow 실험과 등록 모델을 정리합니다. 앱 실험/모델 삭제는 계속 이 화면에서 시작하고,
+            여기서는 남은 MLflow 자산만 정리하는 용도로 사용합니다.
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 12, display: "grid", gap: 10 }}>
+            <div style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+              MLflow 실험
+              <span style={{ color: "var(--text-muted)", marginLeft: 8 }}>
+                {mlflowOrphans?.counts?.experiments || 0}개
+              </span>
+            </div>
+            {!mlflowOrphans?.experiments?.length ? (
+              <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>정리할 고아 실험이 없습니다.</div>
+            ) : (
+              mlflowOrphans.experiments.map((item) => (
+                <div
+                  key={`mlflow-exp-${item.experiment_id}`}
+                  style={{
+                    borderTop: "1px solid var(--border)",
+                    paddingTop: 10,
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 10,
+                    alignItems: "start",
+                  }}
+                >
+                  <div style={{ display: "grid", gap: 4 }}>
+                    <div style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+                      {item.name}
+                      <span style={{ color: "var(--text-muted)", marginLeft: 8 }}>#{item.experiment_id}</span>
+                    </div>
+                    <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
+                      상태 {item.lifecycle_stage || "-"} / run {item.run_count || 0}
+                    </div>
+                  </div>
+                  <ActionButton onClick={() => onDeleteMlflowExperiment?.(item)} tone="danger">
+                    MLflow 삭제
+                  </ActionButton>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 12, display: "grid", gap: 10 }}>
+            <div style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+              MLflow 등록 모델
+              <span style={{ color: "var(--text-muted)", marginLeft: 8 }}>
+                {mlflowOrphans?.counts?.registered_models || 0}개
+              </span>
+            </div>
+            {!mlflowOrphans?.registered_models?.length ? (
+              <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>정리할 고아 등록 모델이 없습니다.</div>
+            ) : (
+              mlflowOrphans.registered_models.map((item) => (
+                <div
+                  key={`mlflow-model-${item.name}`}
+                  style={{
+                    borderTop: "1px solid var(--border)",
+                    paddingTop: 10,
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 10,
+                    alignItems: "start",
+                  }}
+                >
+                  <div style={{ display: "grid", gap: 4 }}>
+                    <div style={{ color: "var(--text-primary)", fontWeight: 700 }}>{item.name}</div>
+                    <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>
+                      최신 버전 {item.latest_versions?.[0] ?? "-"} / 운영 버전 {item.production_version ?? "-"}
+                    </div>
+                  </div>
+                  <ActionButton onClick={() => onDeleteMlflowModel?.(item)} tone="danger">
+                    MLflow 삭제
+                  </ActionButton>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

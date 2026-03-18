@@ -195,6 +195,53 @@ def get_all_registered_models() -> list[dict]:
         return []
 
 
+def list_registered_model_refs() -> list[dict]:
+    client = _get_read_client()
+    if client is None:
+        return []
+    try:
+        payload = []
+        for registered in client.search_registered_models():
+            latest_versions = getattr(registered, "latest_versions", []) or []
+            version_numbers = []
+            production_version = None
+            for version in latest_versions:
+                if getattr(version, "version", None) is not None:
+                    version_numbers.append(int(version.version))
+                if getattr(version, "current_stage", None) == "Production" and getattr(version, "version", None) is not None:
+                    production_version = int(version.version)
+            payload.append(
+                {
+                    "name": registered.name,
+                    "latest_versions": sorted(version_numbers, reverse=True),
+                    "production_version": production_version,
+                }
+            )
+        return sorted(payload, key=lambda item: (-(item["latest_versions"][0] if item["latest_versions"] else 0), item["name"]))
+    except Exception:
+        return []
+
+
+def list_experiment_refs() -> list[dict]:
+    client = _get_read_client()
+    if client is None:
+        return []
+    try:
+        payload = []
+        for experiment in client.search_experiments():
+            payload.append(
+                {
+                    "experiment_id": experiment.experiment_id,
+                    "name": experiment.name,
+                    "lifecycle_stage": experiment.lifecycle_stage,
+                    "last_update_time": _ts_to_iso(getattr(experiment, "last_update_time", None)),
+                }
+            )
+        return sorted(payload, key=lambda item: ((item["last_update_time"] or ""), item["name"]), reverse=True)
+    except Exception:
+        return []
+
+
 def _ts_to_iso(timestamp_ms: int | None) -> str | None:
     if not timestamp_ms:
         return None
@@ -417,6 +464,20 @@ def delete_model_version(model_name: str, version: int) -> dict:
         "deleted_version": int(version),
         "remaining_versions": sorted(remaining_versions, reverse=True),
     }
+
+
+def delete_registered_model_name(model_name: str) -> dict:
+    _require_tracking_server()
+    client = get_client()
+    client.delete_registered_model(model_name)
+    return {"name": model_name, "deleted": True}
+
+
+def delete_mlflow_experiment(experiment_id: str) -> dict:
+    _require_tracking_server()
+    client = get_client()
+    client.delete_experiment(str(experiment_id))
+    return {"experiment_id": str(experiment_id), "deleted": True}
 
 
 def get_registered_versions(model_name: str) -> list[dict]:

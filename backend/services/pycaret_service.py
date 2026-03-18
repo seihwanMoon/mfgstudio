@@ -2900,26 +2900,41 @@ def finalize_model_real(experiment_id: int, algorithm: str, model_name: str, met
     }
 
 
+def _resolve_prediction_columns(result: pd.DataFrame, module_type: str) -> tuple[str, str | None]:
+    if module_type == "classification":
+        label_candidates = ["prediction_label", "Label"]
+        score_candidates = ["prediction_score", "Score"]
+    elif module_type == "anomaly":
+        label_candidates = ["prediction_label", "Label", "Anomaly"]
+        score_candidates = ["prediction_score", "Score", "Anomaly_Score"]
+    else:
+        label_candidates = ["prediction_label", "Label"]
+        score_candidates = []
+
+    label_col = next((column for column in label_candidates if column in result.columns), None)
+    if not label_col:
+        raise KeyError(f"prediction label column not found for module_type={module_type}: {result.columns.tolist()}")
+
+    score_col = next((column for column in score_candidates if column in result.columns), None)
+    return label_col, score_col
+
+
 def predict_payload(model_path: str, module_type: str, input_data: dict, threshold: float = 0.5) -> dict:
     pc = _get_pycaret_module(module_type)
     model = pc.load_model(str(Path(model_path).with_suffix("")))
     frame = pd.DataFrame([input_data])
     if module_type == "classification":
         result = pc.predict_model(model, data=frame, probability_threshold=threshold)
-        label_col = "prediction_label" if "prediction_label" in result.columns else "Label"
-        score_col = "prediction_score" if "prediction_score" in result.columns else "Score"
-        score = result[score_col].iloc[0] if score_col in result.columns else None
-        return {
-            "label": str(result[label_col].iloc[0]),
-            "score": round(float(score), 4) if score is not None else None,
-            "threshold": threshold,
-        }
-    result = pc.predict_model(model, data=frame)
-    label_col = "prediction_label" if "prediction_label" in result.columns else "Label"
+    else:
+        result = pc.predict_model(model, data=frame)
+
+    label_col, score_col = _resolve_prediction_columns(result, module_type)
     label = result[label_col].iloc[0]
+    score = result[score_col].iloc[0] if score_col and score_col in result.columns else None
     return {
         "label": round(float(label), 4) if isinstance(label, (int, float, np.integer, np.floating)) else str(label),
-        "score": None,
+        "score": round(float(score), 4) if score is not None and pd.notna(score) else None,
+        "threshold": threshold if module_type == "classification" else None,
     }
 
 
@@ -2929,18 +2944,15 @@ def predict_batch_rows(model_path: str, module_type: str, rows: list[dict], thre
     frame = pd.DataFrame(rows)
     if module_type == "classification":
         result = pc.predict_model(model, data=frame, probability_threshold=threshold)
-        label_col = "prediction_label" if "prediction_label" in result.columns else "Label"
-        score_col = "prediction_score" if "prediction_score" in result.columns else "Score"
     else:
         result = pc.predict_model(model, data=frame)
-        label_col = "prediction_label" if "prediction_label" in result.columns else "Label"
-        score_col = None
+    label_col, score_col = _resolve_prediction_columns(result, module_type)
 
     payload = []
     for _, row in result.iterrows():
         item = row.to_dict()
         item["label"] = item.get(label_col)
-        if score_col and score_col in item:
+        if score_col and score_col in item and item.get(score_col) is not None and not pd.isna(item.get(score_col)):
             item["score"] = round(float(item[score_col]), 4)
         payload.append(item)
     return payload
